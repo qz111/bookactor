@@ -1,0 +1,16 @@
+{
+  "characters": [
+    {"name": "Narrator", "voice": "alloy"},
+    {"name": "Little Bear", "voice": "nova", "traits": "curious, playful"},
+    {"name": "Mother Bear", "voice": "shimmer", "traits": "warm, gentle"}
+  ],
+  "lines": [
+    {"index": 0, "character": "Narrator", "text": "Once upon a time, in a cozy little den...", "page": 1, "status": "ready"},
+    {"index": 1, "character": "Little Bear", "text": "Good morning, Mama!", "page": 1, "status": "ready"},
+    {"index": 2, "character": "Mother Bear", "text": "Good morning, my little one. Did you sleep well?", "page": 2, "status": "ready"},
+    {"index": 3, "character": "Narrator", "text": "Little Bear looked out the window and saw the world covered in snow.", "page": 2, "status": "ready"},
+    {"index": 4, "character": "Little Bear", "text": "Mama, can we go play outside? Please?", "page": 3, "status": "ready"},
+    {"index": 5, "character": "Mother Bear", "text": "After breakfast, my dear.", "page": 3, "status": "ready"},
+    {"index": 6, "character": "Narrator", "text": "And so they had a warm breakfast together before their snowy adventure.", "page": 4, "status": "ready"}
+  ]
+}
