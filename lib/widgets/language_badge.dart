@@ -18,7 +18,7 @@ class LanguageBadge extends StatelessWidget {
     return Chip(
       label: Text(language.toUpperCase()),
       side: BorderSide(color: color),
-      backgroundColor: color.withOpacity(0.1),
+      backgroundColor: color.withValues(alpha: 0.1),
       labelStyle: TextStyle(color: color, fontSize: 11),
       padding: EdgeInsets.zero,
     );
