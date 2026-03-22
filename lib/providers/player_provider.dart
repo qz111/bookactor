@@ -41,7 +41,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
   void pause() => state = state.copyWith(isPlaying: false);
 
   void nextLine() {
-    if (script == null) return;
+    if (state.script == null) return;
     final readyCount =
         state.script!.lines.where((l) => l.status == 'ready').length;
     if (state.currentLine < readyCount - 1) {
