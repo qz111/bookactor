@@ -29,20 +29,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Future<void> _loadScript() async {
     // Phase 2: mock version loads from asset; real versions load from DB
     final String scriptJson;
+    var startLine = 0;
+
     if (widget.versionId == 'mock_book_001_en') {
-      scriptJson =
-          await rootBundle.loadString('assets/mock/script.json');
+      scriptJson = await rootBundle.loadString('assets/mock/script.json');
+      // Mock version is not in DB; always start from line 0
+      if (!mounted) return;
     } else {
       final version =
           await AppDatabase.instance.getAudioVersion(widget.versionId);
       if (version == null || !mounted) return;
       scriptJson = version.scriptJson;
+      startLine = version.lastPlayedLine;
     }
 
     final script = Script.fromJson(scriptJson);
-    final version =
-        await AppDatabase.instance.getAudioVersion(widget.versionId);
-    final startLine = version?.lastPlayedLine ?? 0;
     if (!mounted) return;
     ref
         .read(playerProvider.notifier)
