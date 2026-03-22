@@ -78,6 +78,29 @@ void main() {
       expect(updated?.lastPlayedLine, 3);
     });
 
+    test('updateAudioVersionStatus persists status and optional fields', () async {
+      await db.insertAudioVersion(testVersion);
+
+      // status only
+      await db.updateAudioVersionStatus('test123_en', 'generating');
+      var updated = await db.getAudioVersion('test123_en');
+      expect(updated?.status, 'generating');
+      expect(updated?.lastGeneratedLine, 4); // unchanged
+
+      // status + lastGeneratedLine
+      await db.updateAudioVersionStatus('test123_en', 'generating',
+          lastGeneratedLine: 5);
+      updated = await db.getAudioVersion('test123_en');
+      expect(updated?.lastGeneratedLine, 5);
+
+      // status + scriptJson
+      await db.updateAudioVersionStatus('test123_en', 'ready',
+          scriptJson: '{"updated":true}');
+      updated = await db.getAudioVersion('test123_en');
+      expect(updated?.status, 'ready');
+      expect(updated?.scriptJson, '{"updated":true}');
+    });
+
     test('getGeneratingVersions returns only generating rows', () async {
       final generatingVersion = AudioVersion(
         versionId: 'test123_zh',

@@ -24,7 +24,10 @@ class AppDatabase {
     return _db!;
   }
 
-  Future<void> close() async => _db?.close();
+  Future<void> close() async {
+    await _db?.close();
+    _db = null;
+  }
 
   Future<void> _createDb(Database db, int version) async {
     await db.execute('''
