@@ -3,7 +3,7 @@ import 'package:bookactor/models/book.dart';
 
 void main() {
   group('Book', () {
-    final book = const Book(
+    const book = Book(
       bookId: 'abc123',
       title: 'Little Bear',
       coverPath: '/path/cover.jpg',

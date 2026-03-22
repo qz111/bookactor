@@ -19,7 +19,7 @@ void main() {
 
   tearDown(() async => db.close());
 
-  final testBook = Book(
+  const testBook = Book(
     bookId: 'test123',
     title: 'Test Book',
     pagesDir: '/test/pages',
@@ -28,7 +28,7 @@ void main() {
     createdAt: 1711065600,
   );
 
-  final testVersion = AudioVersion(
+  const testVersion = AudioVersion(
     versionId: 'test123_en',
     bookId: 'test123',
     language: 'en',
@@ -102,7 +102,7 @@ void main() {
     });
 
     test('getGeneratingVersions returns only generating rows', () async {
-      final generatingVersion = AudioVersion(
+      const generatingVersion = AudioVersion(
         versionId: 'test123_zh',
         bookId: 'test123',
         language: 'zh',

@@ -3,7 +3,7 @@ import 'package:bookactor/models/audio_version.dart';
 
 void main() {
   group('AudioVersion', () {
-    final version = const AudioVersion(
+    const version = AudioVersion(
       versionId: 'abc123_en',
       bookId: 'abc123',
       language: 'en',

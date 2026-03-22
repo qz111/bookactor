@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:bookactor/models/book.dart';
-import 'package:bookactor/models/audio_version.dart';
 import 'package:bookactor/providers/books_provider.dart';
 import 'package:bookactor/screens/library_screen.dart';
 
