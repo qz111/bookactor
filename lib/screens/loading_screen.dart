@@ -65,7 +65,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
           final i = entry.key;
           final step = entry.value;
           final isDone = _step > i;
-          final isCurrent = _step == i;
+          final isCurrent = _step > 0 && _step == i;
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(
