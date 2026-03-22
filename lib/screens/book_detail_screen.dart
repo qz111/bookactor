@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../mock/mock_data.dart';
 import '../providers/books_provider.dart';
 import '../widgets/language_badge.dart';
 
@@ -75,17 +76,11 @@ class BookDetailScreen extends ConsumerWidget {
     );
   }
 
-  String _languageName(String code) => const {
-        'en': 'English',
-        'zh': 'Chinese (Simplified)',
-        'zh-TW': 'Chinese (Traditional)',
-        'fr': 'French',
-        'es': 'Spanish',
-        'de': 'German',
-        'ja': 'Japanese',
-        'ko': 'Korean',
-      }[code] ??
-      code;
+  String _languageName(String code) =>
+      supportedLanguages.firstWhere(
+        (l) => l['code'] == code,
+        orElse: () => {'code': code, 'name': code},
+      )['name']!;
 
   void _showNewLanguageSheet(BuildContext context, String bookId) {
     showModalBottomSheet(
@@ -124,15 +119,10 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
             value: _language,
             decoration: const InputDecoration(
                 labelText: 'Language', border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 'zh', child: Text('Chinese (Simplified)')),
-              DropdownMenuItem(value: 'zh-TW', child: Text('Chinese (Traditional)')),
-              DropdownMenuItem(value: 'fr', child: Text('French')),
-              DropdownMenuItem(value: 'es', child: Text('Spanish')),
-              DropdownMenuItem(value: 'de', child: Text('German')),
-              DropdownMenuItem(value: 'ja', child: Text('Japanese')),
-              DropdownMenuItem(value: 'ko', child: Text('Korean')),
-            ],
+            items: supportedLanguages
+                .map((l) => DropdownMenuItem(
+                    value: l['code'], child: Text(l['name']!)))
+                .toList(),
             onChanged: (v) => setState(() => _language = v!),
           ),
           const SizedBox(height: 12),
