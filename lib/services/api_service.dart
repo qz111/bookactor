@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import '../models/processing_mode.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -20,9 +21,11 @@ class ApiService {
   Future<List<Map<String, dynamic>>> analyzePages({
     required List<Uint8List> imageBytesList,
     required String vlmProvider,
+    required ProcessingMode processingMode,
   }) async {
     final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/analyze'))
-      ..fields['vlm_provider'] = vlmProvider;
+      ..fields['vlm_provider'] = vlmProvider
+      ..fields['processing_mode'] = processingMode.toApiValue();
     for (int i = 0; i < imageBytesList.length; i++) {
       request.files.add(http.MultipartFile.fromBytes(
         'images',

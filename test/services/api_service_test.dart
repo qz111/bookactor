@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:bookactor/services/api_service.dart';
+import 'package:bookactor/models/processing_mode.dart';
 
 void main() {
   const baseUrl = 'http://localhost:8000';
@@ -16,6 +17,12 @@ void main() {
       final client = MockClient((request) async {
         expect(request.url.path, '/analyze');
         expect(request.method, 'POST');
+        // Verify the processing_mode field is present in the multipart body
+        final bodyStr = request.bodyBytes.isNotEmpty
+          ? String.fromCharCodes(request.bodyBytes)
+          : '';
+        expect(bodyStr, contains('processing_mode'));
+        expect(bodyStr, contains('text_heavy'));
         return http.Response(
           jsonEncode({'pages': fakePages}),
           200,
@@ -27,6 +34,7 @@ void main() {
       final result = await service.analyzePages(
         imageBytesList: [Uint8List.fromList([0, 1, 2])],
         vlmProvider: 'gemini',
+        processingMode: ProcessingMode.textHeavy,
       );
       expect(result, fakePages);
     });
@@ -35,7 +43,11 @@ void main() {
       final client = MockClient((_) async => http.Response('error', 422));
       final service = ApiService(baseUrl: baseUrl, client: client);
       await expectLater(
-        () => service.analyzePages(imageBytesList: [], vlmProvider: 'gemini'),
+        () => service.analyzePages(
+          imageBytesList: [],
+          vlmProvider: 'gemini',
+          processingMode: ProcessingMode.textHeavy,
+        ),
         throwsA(isA<ApiException>()),
       );
     });
