@@ -45,7 +45,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   }
 
   Future<void> _generate() async {
-    if (_selectedFilePath == null) return;
+    if (_selectedFilePath == null || _processingMode == null) return;
     setState(() => _isGenerating = true);
     try {
       final fileBytes = await File(_selectedFilePath!).readAsBytes();
@@ -237,8 +237,9 @@ class _ModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.all(16),
