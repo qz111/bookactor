@@ -16,7 +16,9 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfiNoIsolate;
-    // Initialize the production singleton so the sheet's DB insert works.
+    // _NewLanguageSheet calls AppDatabase.instance directly (no DI injection point),
+    // so we must initialize the production singleton here. A future refactor to
+    // inject the DB via a provider would let us use AppDatabase.forTesting() instead.
     await AppDatabase.instance.init();
   });
 

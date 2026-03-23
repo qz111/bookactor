@@ -35,6 +35,7 @@ void main() {
       find.byType(AnimatedContainer),
     );
     final decoration = container.decoration as BoxDecoration;
+    // Exact-color assertion: stronger than the plan's alpha-nonzero check.
     expect(decoration.color, Colors.amber.withValues(alpha: 0.15));
   });
 
