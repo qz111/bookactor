@@ -18,9 +18,7 @@ void main() {
         expect(request.url.path, '/analyze');
         expect(request.method, 'POST');
         // Verify the processing_mode field is present in the multipart body
-        final bodyStr = request.bodyBytes.isNotEmpty
-          ? String.fromCharCodes(request.bodyBytes)
-          : '';
+        final bodyStr = String.fromCharCodes(request.bodyBytes);
         expect(bodyStr, contains('processing_mode'));
         expect(bodyStr, contains('text_heavy'));
         return http.Response(
