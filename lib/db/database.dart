@@ -64,6 +64,17 @@ class AppDatabase {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// Updates the vlm_output column for a book after /analyze returns.
+  Future<void> updateBookVlmOutput(String bookId, String vlmOutput) async {
+    final db = await database;
+    await db.update(
+      'books',
+      {'vlm_output': vlmOutput},
+      where: 'book_id = ?',
+      whereArgs: [bookId],
+    );
+  }
+
   Future<Book?> getBook(String bookId) async {
     final db = await database;
     final rows =

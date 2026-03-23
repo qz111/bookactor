@@ -53,6 +53,26 @@ void main() {
       final books = await db.getAllBooks();
       expect(books.length, 1);
     });
+
+    test('updateBookVlmOutput updates vlm_output for existing book', () async {
+      final db = AppDatabase.forTesting();
+      await db.init();
+      await db.insertBook(const Book(
+        bookId: 'book_test_vlm',
+        title: 'Test',
+        coverPath: null,
+        pagesDir: '/tmp/pages',
+        vlmOutput: '[]',
+        vlmProvider: 'gemini',
+        createdAt: 1000,
+      ));
+
+      await db.updateBookVlmOutput('book_test_vlm', '[{"page":1,"text":"Hello"}]');
+
+      final updated = await db.getBook('book_test_vlm');
+      expect(updated!.vlmOutput, '[{"page":1,"text":"Hello"}]');
+      await db.close();
+    });
   });
 
   group('AudioVersions', () {
