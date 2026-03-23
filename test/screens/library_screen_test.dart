@@ -46,6 +46,23 @@ void main() {
     expect(find.text('No books yet'), findsOneWidget);
   });
 
+  testWidgets('Dismiss button is absent when no generating versions exist',
+      (tester) async {
+    // The banner (and its Dismiss button) only appears when generatingVersionsProvider
+    // returns a non-empty list. With an empty list, no banner should show.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          booksProvider.overrideWith((_) async => <Book>[]),
+          generatingVersionsProvider.overrideWith((_) async => []),
+        ],
+        child: const MaterialApp(home: LibraryScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Dismiss'), findsNothing);
+  });
+
   testWidgets('Add Book FAB navigates to upload', (tester) async {
     final router = GoRouter(
       initialLocation: '/',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../db/database.dart';
 import '../providers/books_provider.dart';
 import '../widgets/book_card.dart';
 
@@ -38,8 +39,13 @@ class LibraryScreen extends ConsumerWidget {
                     child: const Text('Resume'),
                   ),
                   TextButton(
-                    onPressed: () {
-                      // Phase 3: mark as error in DB
+                    onPressed: () async {
+                      for (final v in versions) {
+                        await AppDatabase.instance.updateAudioVersionStatus(
+                          v.versionId, 'error',
+                        );
+                      }
+                      ref.invalidate(generatingVersionsProvider);
                     },
                     child: const Text('Dismiss'),
                   ),
