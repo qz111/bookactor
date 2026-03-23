@@ -12,7 +12,6 @@ import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 
 /// Parameters passed to LoadingScreen via GoRouter's extra field.
-/// Full implementation will be added in Task 7.
 class LoadingParams {
   final String bookId;
   final String versionId;
