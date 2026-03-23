@@ -188,7 +188,8 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                     language: _language,
                     vlmProvider: widget.book.vlmProvider,
                     llmProvider: _llmProvider,
-                    // processingMode is not persisted; textHeavy is the safe default on resume.
+                    // processingMode is not used on resume (isNewBook: false skips analyzePages).
+                    // Required field; textHeavy satisfies the constructor.
                     processingMode: ProcessingMode.textHeavy,
                     isNewBook: false,
                     lastGeneratedLine: -1,

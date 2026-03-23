@@ -48,7 +48,8 @@ class LibraryScreen extends ConsumerWidget {
                             language: v.language,
                             vlmProvider: book.vlmProvider,
                             llmProvider: v.llmProvider ?? 'gpt4o',
-                            // processingMode is not persisted; textHeavy is the safe default on resume.
+                            // processingMode is not used on resume (isNewBook: false skips analyzePages).
+                            // Required field; textHeavy satisfies the constructor.
                             processingMode: ProcessingMode.textHeavy,
                             isNewBook: false,
                             lastGeneratedLine: v.lastGeneratedLine,
