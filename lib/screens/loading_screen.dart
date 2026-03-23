@@ -1,6 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+/// Parameters passed to LoadingScreen via GoRouter's extra field.
+/// Full implementation will be added in Task 7.
+class LoadingParams {
+  final String bookId;
+  final String versionId;
+  final String filePath;
+  final String language;
+  final String vlmProvider;
+  final String llmProvider;
+  final bool isNewBook;
+  final int lastGeneratedLine;
+
+  const LoadingParams({
+    required this.bookId,
+    required this.versionId,
+    required this.filePath,
+    required this.language,
+    required this.vlmProvider,
+    required this.llmProvider,
+    required this.isNewBook,
+    required this.lastGeneratedLine,
+  });
+}
+
 class LoadingScreen extends StatefulWidget {
   final String bookId;
   final String language;
