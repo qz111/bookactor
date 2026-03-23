@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../db/database.dart';
 import '../providers/books_provider.dart';
+import '../screens/loading_screen.dart';
 import '../widgets/book_card.dart';
 
 class LibraryScreen extends ConsumerWidget {
@@ -31,9 +32,25 @@ class LibraryScreen extends ConsumerWidget {
                     '${versions.length} audiobook(s) were interrupted. Resume?'),
                 actions: [
                   TextButton(
-                    onPressed: () {
+                    onPressed: () async {
                       for (final v in versions) {
-                        context.push('/loading/${v.bookId}/${v.language}');
+                        final book =
+                            await AppDatabase.instance.getBook(v.bookId);
+                        if (book == null) continue;
+                        if (!context.mounted) return;
+                        context.push(
+                          '/loading',
+                          extra: LoadingParams(
+                            bookId: v.bookId,
+                            versionId: v.versionId,
+                            filePath: book.pagesDir,
+                            language: v.language,
+                            vlmProvider: book.vlmProvider,
+                            llmProvider: v.llmProvider ?? 'gpt4o',
+                            isNewBook: false,
+                            lastGeneratedLine: v.lastGeneratedLine,
+                          ),
+                        );
                       }
                     },
                     child: const Text('Resume'),

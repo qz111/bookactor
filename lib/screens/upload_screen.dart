@@ -82,7 +82,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           vlmProvider: _vlmProvider,
           llmProvider: _llmProvider,
           isNewBook: true,
-          lastGeneratedLine: 0,
+          lastGeneratedLine: -1,
         ),
       );
     } finally {

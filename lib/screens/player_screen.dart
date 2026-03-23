@@ -79,20 +79,25 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       return;
     }
 
-    final state = ref.read(playerProvider);
-    final line = state.currentScriptLine;
-    if (line == null) return;
+    try {
+      final state = ref.read(playerProvider);
+      final line = state.currentScriptLine;
+      if (line == null) return;
 
-    final fileName = 'line_${line.index.toString().padLeft(3, '0')}.mp3';
+      final fileName = 'line_${line.index.toString().padLeft(3, '0')}.mp3';
 
-    // Fetch version for audioDir
-    final version =
-        await AppDatabase.instance.getAudioVersion(widget.versionId);
-    if (version == null) return;
+      // Fetch version for audioDir
+      final version =
+          await AppDatabase.instance.getAudioVersion(widget.versionId);
+      if (version == null) return;
 
-    final filePath = '${version.audioDir}/$fileName';
-    await _audio.load(filePath);
-    await _audio.play();
+      final filePath = '${version.audioDir}/$fileName';
+      await _audio.load(filePath);
+      await _audio.play();
+    } catch (e) {
+      // Missing/corrupt audio file — stop playback gracefully
+      debugPrint('AudioService.load failed: $e');
+    }
   }
 
   void _saveProgress(int line) {

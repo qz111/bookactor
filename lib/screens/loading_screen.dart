@@ -153,9 +153,8 @@ class _LoadingScreenState extends State<LoadingScreen> {
           List<Map<String, dynamic>>.from(scriptMap['lines'] as List);
       final pendingLines = lines
           .where((l) =>
-              (l['status'] == 'pending') &&
-              ((l['index'] as int) > p.lastGeneratedLine ||
-                  p.lastGeneratedLine == 0))
+              l['status'] == 'pending' &&
+              (l['index'] as int) > p.lastGeneratedLine)
           .map((l) {
             final charName = l['character'] as String;
             final voice = characters.firstWhere(

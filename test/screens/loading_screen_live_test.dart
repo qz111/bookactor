@@ -53,7 +53,7 @@ void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    databaseFactory = databaseFactoryFfiNoIsolate;
 
     final db = AppDatabase.instance;
     await db.init();
@@ -82,6 +82,11 @@ void main() {
     ));
   });
 
+  tearDownAll(() async {
+    await AppDatabase.instance.close();
+    databaseFactory = databaseFactoryFfi;
+  });
+
   testWidgets('LoadingScreen calls analyze->script->tts in order for new book',
       (tester) async {
     final fakeApi = _RecordingApiService();
@@ -96,7 +101,7 @@ void main() {
       vlmProvider: 'gemini',
       llmProvider: 'gpt4o',
       isNewBook: true,
-      lastGeneratedLine: 0,
+      lastGeneratedLine: -1,
       audioDirOverride: tempAudioDir.path,
     );
 
