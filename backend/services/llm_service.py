@@ -49,8 +49,8 @@ def generate_script(vlm_output: list[dict], language: str, llm_provider: str) ->
             for line in data.get("lines", []):
                 line["status"] = "pending"
             return data
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError) as exc:
             if attempt == 1:
-                raise ValueError(f"LLM returned invalid JSON: {raw!r}")
+                raise ValueError(f"LLM returned invalid JSON: {raw!r}") from exc
 
     raise ValueError("LLM returned invalid JSON after 2 attempts")  # unreachable
