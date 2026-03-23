@@ -34,7 +34,7 @@ void main() {
     test('throws ApiException on non-200 response', () async {
       final client = MockClient((_) async => http.Response('error', 422));
       final service = ApiService(baseUrl: baseUrl, client: client);
-      expect(
+      await expectLater(
         () => service.analyzePages(imageBytesList: [], vlmProvider: 'gemini'),
         throwsA(isA<ApiException>()),
       );
@@ -70,7 +70,7 @@ void main() {
     test('throws ApiException on error', () async {
       final client = MockClient((_) async => http.Response('bad', 500));
       final service = ApiService(baseUrl: baseUrl, client: client);
-      expect(
+      await expectLater(
         () => service.generateScript(vlmOutput: [], language: 'en', llmProvider: 'gpt4o'),
         throwsA(isA<ApiException>()),
       );
