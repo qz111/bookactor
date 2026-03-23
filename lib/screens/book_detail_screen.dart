@@ -6,6 +6,7 @@ import '../db/database.dart';
 import '../mock/mock_data.dart';
 import '../models/audio_version.dart';
 import '../models/book.dart';
+import '../models/processing_mode.dart';
 import '../providers/books_provider.dart';
 import '../screens/loading_screen.dart';
 import '../widgets/language_badge.dart';
@@ -187,6 +188,7 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                     language: _language,
                     vlmProvider: widget.book.vlmProvider,
                     llmProvider: _llmProvider,
+                    processingMode: ProcessingMode.textHeavy,
                     isNewBook: false,
                     lastGeneratedLine: -1,
                   ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../db/database.dart';
+import '../models/processing_mode.dart';
 import '../providers/books_provider.dart';
 import '../screens/loading_screen.dart';
 import '../widgets/book_card.dart';
@@ -47,6 +48,7 @@ class LibraryScreen extends ConsumerWidget {
                             language: v.language,
                             vlmProvider: book.vlmProvider,
                             llmProvider: v.llmProvider ?? 'gpt4o',
+                            processingMode: ProcessingMode.textHeavy,
                             isNewBook: false,
                             lastGeneratedLine: v.lastGeneratedLine,
                           ),

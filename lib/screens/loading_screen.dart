@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path_pkg;
 import 'package:path_provider/path_provider.dart';
 import '../db/database.dart';
 import '../models/audio_version.dart';
+import '../models/processing_mode.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 
@@ -19,6 +20,7 @@ class LoadingParams {
   final String language;
   final String vlmProvider;
   final String llmProvider;
+  final ProcessingMode processingMode;
   final bool isNewBook;
   final int lastGeneratedLine;
   /// Optional override for the audio output directory (useful in tests).
@@ -31,6 +33,7 @@ class LoadingParams {
     required this.language,
     required this.vlmProvider,
     required this.llmProvider,
+    required this.processingMode,
     required this.isNewBook,
     required this.lastGeneratedLine,
     this.audioDirOverride,
@@ -107,6 +110,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
         final pages = await api.analyzePages(
           imageBytesList: imageBytes,
           vlmProvider: p.vlmProvider,
+          processingMode: p.processingMode,
         );
         if (!mounted) return;
 

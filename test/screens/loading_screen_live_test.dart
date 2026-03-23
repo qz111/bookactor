@@ -9,6 +9,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:bookactor/db/database.dart';
 import 'package:bookactor/models/book.dart';
 import 'package:bookactor/models/audio_version.dart';
+import 'package:bookactor/models/processing_mode.dart';
 import 'package:bookactor/screens/loading_screen.dart';
 import 'package:bookactor/services/api_service.dart';
 
@@ -20,6 +21,7 @@ class _RecordingApiService extends ApiService {
   Future<List<Map<String, dynamic>>> analyzePages({
     required List<Uint8List> imageBytesList,
     required String vlmProvider,
+    required ProcessingMode processingMode,
   }) async {
     calls.add('analyze');
     return [{'page': 1, 'text': 'test'}];
@@ -100,6 +102,7 @@ void main() {
       language: 'en',
       vlmProvider: 'gemini',
       llmProvider: 'gpt4o',
+      processingMode: ProcessingMode.textHeavy,
       isNewBook: true,
       lastGeneratedLine: -1,
       audioDirOverride: tempAudioDir.path,
