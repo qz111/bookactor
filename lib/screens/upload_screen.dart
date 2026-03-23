@@ -11,6 +11,7 @@ import '../db/database.dart';
 import '../mock/mock_data.dart';
 import '../models/audio_version.dart';
 import '../models/book.dart';
+import '../models/processing_mode.dart';
 import '../screens/loading_screen.dart';
 import '../services/pdf_service.dart';
 
@@ -28,6 +29,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   String _language = 'en';
   String _vlmProvider = 'gemini';
   String _llmProvider = 'gpt4o';
+  ProcessingMode? _processingMode;
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -98,6 +100,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           language: _language,
           vlmProvider: _vlmProvider,
           llmProvider: _llmProvider,
+          processingMode: _processingMode!,
           isNewBook: true,
           lastGeneratedLine: -1,
         ),
@@ -114,6 +117,35 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          Text(
+            'What kind of book is this?',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ModeCard(
+                  icon: '📝',
+                  label: 'Text-Heavy',
+                  subtitle: 'Story told through words',
+                  selected: _processingMode == ProcessingMode.textHeavy,
+                  onTap: () => setState(() => _processingMode = ProcessingMode.textHeavy),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ModeCard(
+                  icon: '🖼️',
+                  label: 'Picture Book',
+                  subtitle: 'Story told through illustrations',
+                  selected: _processingMode == ProcessingMode.pictureBook,
+                  onTap: () => setState(() => _processingMode = ProcessingMode.pictureBook),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
           GestureDetector(
             onTap: _pickFile,
             child: Container(
@@ -175,11 +207,69 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           ),
           const SizedBox(height: 32),
           FilledButton.icon(
-            onPressed: (_selectedFilePath == null || _isGenerating) ? null : _generate,
+            onPressed: (_selectedFilePath == null || _processingMode == null || _isGenerating)
+                ? null
+                : _generate,
             icon: const Icon(Icons.auto_awesome),
             label: const Text('Generate Audiobook'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModeCard extends StatelessWidget {
+  final String icon;
+  final String label;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeCard({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? color : Theme.of(context).dividerColor,
+            width: selected ? 2 : 1,
+          ),
+          color: selected
+              ? color.withValues(alpha: 0.1)
+              : Theme.of(context).colorScheme.surface,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 28)),
+            const SizedBox(height: 8),
+            Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(subtitle,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
       ),
     );
   }
