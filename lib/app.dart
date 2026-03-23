@@ -19,6 +19,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/upload', builder: (_, __) => const UploadScreen()),
       GoRoute(
+        path: '/loading',
+        builder: (context, state) {
+          final extra = state.extra as LoadingParams?;
+          return LoadingScreen(
+            bookId: extra?.bookId ?? '',
+            language: extra?.language ?? 'en',
+            params: extra,
+          );
+        },
+      ),
+      GoRoute(
         path: '/loading/:bookId/:language',
         builder: (_, state) => LoadingScreen(
           bookId: state.pathParameters['bookId']!,

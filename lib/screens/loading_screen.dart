@@ -1,5 +1,14 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as path_pkg;
+import 'package:path_provider/path_provider.dart';
+import '../db/database.dart';
+import '../models/audio_version.dart';
+import '../services/api_service.dart';
+import '../services/pdf_service.dart';
 
 /// Parameters passed to LoadingScreen via GoRouter's extra field.
 /// Full implementation will be added in Task 7.
@@ -12,6 +21,8 @@ class LoadingParams {
   final String llmProvider;
   final bool isNewBook;
   final int lastGeneratedLine;
+  /// Optional override for the audio output directory (useful in tests).
+  final String? audioDirOverride;
 
   const LoadingParams({
     required this.bookId,
@@ -22,15 +33,23 @@ class LoadingParams {
     required this.llmProvider,
     required this.isNewBook,
     required this.lastGeneratedLine,
+    this.audioDirOverride,
   });
 }
 
 class LoadingScreen extends StatefulWidget {
   final String bookId;
   final String language;
+  final LoadingParams? params;
+  final ApiService? apiService;
 
-  const LoadingScreen(
-      {super.key, required this.bookId, required this.language});
+  const LoadingScreen({
+    super.key,
+    this.bookId = '',
+    this.language = 'en',
+    this.params,
+    this.apiService,
+  });
 
   @override
   State<LoadingScreen> createState() => _LoadingScreenState();
@@ -49,7 +68,11 @@ class _LoadingScreenState extends State<LoadingScreen> {
   @override
   void initState() {
     super.initState();
-    _runMockPipeline();
+    if (widget.params != null) {
+      _runLivePipeline();
+    } else {
+      _runMockPipeline();
+    }
   }
 
   Future<void> _runMockPipeline() async {
@@ -61,6 +84,143 @@ class _LoadingScreenState extends State<LoadingScreen> {
     if (!mounted) return;
     // Phase 2: always navigates to mock English version
     context.go('/player/mock_book_001_en');
+  }
+
+  Future<void> _runLivePipeline() async {
+    final p = widget.params!;
+    final api = widget.apiService ?? ApiService(baseUrl: 'http://localhost:8000');
+
+    try {
+      setState(() => _step = 0);
+
+      // ── 1. Analyze (VLM) ────────────────────────────────────────────────
+      List<Map<String, dynamic>> vlmOutput;
+      if (p.isNewBook) {
+        final List<Uint8List> imageBytes;
+        if (p.filePath.toLowerCase().endsWith('.pdf')) {
+          imageBytes = await PdfService.pdfToJpegBytes(p.filePath);
+        } else {
+          imageBytes = [await File(p.filePath).readAsBytes()];
+        }
+        if (!mounted) return;
+
+        final pages = await api.analyzePages(
+          imageBytesList: imageBytes,
+          vlmProvider: p.vlmProvider,
+        );
+        if (!mounted) return;
+
+        await AppDatabase.instance.updateBookVlmOutput(
+            p.bookId, jsonEncode(pages));
+        vlmOutput = pages;
+      } else {
+        final book = await AppDatabase.instance.getBook(p.bookId);
+        vlmOutput = List<Map<String, dynamic>>.from(
+            jsonDecode(book!.vlmOutput) as List);
+      }
+      if (!mounted) return;
+      setState(() => _step = 1);
+
+      // ── 2. Script (LLM) ─────────────────────────────────────────────────
+      final scriptMap = await api.generateScript(
+        vlmOutput: vlmOutput,
+        language: p.language,
+        llmProvider: p.llmProvider,
+      );
+      if (!mounted) return;
+
+      await AppDatabase.instance.updateAudioVersionStatus(
+        p.versionId, 'generating',
+        scriptJson: jsonEncode(scriptMap),
+      );
+      setState(() => _step = 2);
+
+      // ── 3. TTS ──────────────────────────────────────────────────────────
+      final String audioDir;
+      if (p.audioDirOverride != null) {
+        audioDir = p.audioDirOverride!;
+      } else {
+        final docsDir = await getApplicationDocumentsDirectory();
+        audioDir = path_pkg.join(docsDir.path, 'audio', p.versionId);
+      }
+      await Directory(audioDir).create(recursive: true);
+      if (!mounted) return;
+
+      final characters =
+          List<Map<String, dynamic>>.from(scriptMap['characters'] as List);
+      final lines =
+          List<Map<String, dynamic>>.from(scriptMap['lines'] as List);
+      final pendingLines = lines
+          .where((l) =>
+              (l['status'] == 'pending') &&
+              ((l['index'] as int) > p.lastGeneratedLine ||
+                  p.lastGeneratedLine == 0))
+          .map((l) {
+            final charName = l['character'] as String;
+            final voice = characters.firstWhere(
+              (c) => c['name'] == charName,
+              orElse: () => {'voice': 'alloy'},
+            )['voice'] as String;
+            return {
+              'index': l['index'],
+              'text': l['text'],
+              'voice': voice,
+            };
+          })
+          .toList();
+
+      final audioResults = await api.generateAudio(lines: pendingLines);
+      final scriptLines = List<Map<String, dynamic>>.from(lines);
+
+      for (final result in audioResults) {
+        final idx = result['index'] as int;
+        if (result['status'] == 'ready') {
+          final audioBytes = base64Decode(result['audio_b64'] as String);
+          final fileName = 'line_${idx.toString().padLeft(3, '0')}.mp3';
+          await File(path_pkg.join(audioDir, fileName)).writeAsBytes(audioBytes);
+          scriptLines[idx] = {...scriptLines[idx], 'status': 'ready'};
+        } else {
+          scriptLines[idx] = {...scriptLines[idx], 'status': 'error'};
+        }
+        await AppDatabase.instance.updateAudioVersionStatus(
+          p.versionId, 'generating',
+          lastGeneratedLine: idx,
+          scriptJson: jsonEncode({...scriptMap, 'lines': scriptLines}),
+        );
+      }
+      if (!mounted) return;
+
+      // Mark ready
+      final existing =
+          await AppDatabase.instance.getAudioVersion(p.versionId);
+      if (existing != null) {
+        await AppDatabase.instance.insertAudioVersion(
+          AudioVersion(
+            versionId: existing.versionId,
+            bookId: existing.bookId,
+            language: existing.language,
+            llmProvider: existing.llmProvider,
+            scriptJson: existing.scriptJson,
+            audioDir: audioDir,
+            status: 'ready',
+            lastGeneratedLine: existing.lastGeneratedLine,
+            lastPlayedLine: existing.lastPlayedLine,
+            createdAt: existing.createdAt,
+          ),
+        );
+      }
+      if (!mounted) return;
+      context.go('/player/${p.versionId}');
+    } on ApiException catch (_) {
+      if (!mounted) return;
+      setState(() => _hasError = true);
+    } on PdfException catch (_) {
+      if (!mounted) return;
+      setState(() => _hasError = true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _hasError = true);
+    }
   }
 
   @override
@@ -142,11 +302,12 @@ class _LoadingScreenState extends State<LoadingScreen> {
         const SizedBox(height: 24),
         FilledButton(
           onPressed: () {
-            setState(() {
-              _step = 0;
-              _hasError = false;
-            });
-            _runMockPipeline();
+            setState(() { _step = 0; _hasError = false; });
+            if (widget.params != null) {
+              _runLivePipeline();
+            } else {
+              _runMockPipeline();
+            }
           },
           child: const Text('Try Again'),
         ),
