@@ -133,6 +133,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
         p.versionId, 'generating',
         scriptJson: jsonEncode(scriptMap),
       );
+      if (!mounted) return;
       setState(() => _step = 2);
 
       // ── 3. TTS ──────────────────────────────────────────────────────────
@@ -174,13 +175,15 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
       for (final result in audioResults) {
         final idx = result['index'] as int;
+        final lineIdx = scriptLines.indexWhere((l) => l['index'] == idx);
+        if (lineIdx == -1) continue; // skip if index not found
         if (result['status'] == 'ready') {
           final audioBytes = base64Decode(result['audio_b64'] as String);
           final fileName = 'line_${idx.toString().padLeft(3, '0')}.mp3';
           await File(path_pkg.join(audioDir, fileName)).writeAsBytes(audioBytes);
-          scriptLines[idx] = {...scriptLines[idx], 'status': 'ready'};
+          scriptLines[lineIdx] = {...scriptLines[lineIdx], 'status': 'ready'};
         } else {
-          scriptLines[idx] = {...scriptLines[idx], 'status': 'error'};
+          scriptLines[lineIdx] = {...scriptLines[lineIdx], 'status': 'error'};
         }
         await AppDatabase.instance.updateAudioVersionStatus(
           p.versionId, 'generating',

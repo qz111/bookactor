@@ -126,6 +126,6 @@ void main() {
     });
     await tester.pump();
 
-    expect(fakeApi.calls, containsAllInOrder(['analyze', 'script', 'tts']));
+    expect(fakeApi.calls, equals(['analyze', 'script', 'tts']));
   });
 }
