@@ -156,5 +156,6 @@ void main() {
 
     // Mock data should be loaded; AudioService.load should have been called
     expect(fakeAudio.loadCalled, isTrue);
+    expect(fakeAudio.playCalled, isTrue);
   });
 }

@@ -64,6 +64,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   void _onLineComplete() {
+    if (!mounted) return;
     // Auto-advance to next line
     final notifier = ref.read(playerProvider.notifier);
     notifier.nextLine();
@@ -169,7 +170,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   onPlay: () {
                     ref.read(playerProvider.notifier).play();
                     _audio.play();
-                    _loadAndPlayCurrentLine();
                   },
                   onPause: () {
                     ref.read(playerProvider.notifier).pause();
