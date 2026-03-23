@@ -10,6 +10,14 @@ async def analyze(
     images: Annotated[list[UploadFile], File()],
     vlm_provider: Annotated[str, Form()],
 ):
+    """Analyze book page images using a Vision Language Model.
+
+    Returns:
+        {"pages": [{"page": int, "text": str}, ...]}
+
+    Raises:
+        HTTPException(422): If VLM returns invalid JSON or unknown provider.
+    """
     image_bytes_list = [await img.read() for img in images]
     try:
         pages = analyze_pages(
