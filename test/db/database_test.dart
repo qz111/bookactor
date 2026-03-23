@@ -54,6 +54,13 @@ void main() {
       expect(books.length, 1);
     });
 
+    test('updateBookCoverPath persists cover_path for existing book', () async {
+      await db.insertBook(testBook);
+      await db.updateBookCoverPath('test123', '/app/docs/test123_cover.jpg');
+      final updated = await db.getBook('test123');
+      expect(updated?.coverPath, '/app/docs/test123_cover.jpg');
+    });
+
     test('updateBookVlmOutput updates vlm_output for existing book', () async {
       final db = AppDatabase.forTesting();
       await db.init();

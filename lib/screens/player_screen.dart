@@ -166,7 +166,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 const SizedBox(height: 16),
                 if (line != null)
                   KaraokeText(
-                      text: line.text, character: line.character),
+                    text: line.text,
+                    character: line.character,
+                    isPlaying: playerState.isPlaying,
+                  ),
                 const SizedBox(height: 24),
                 AudioControls(
                   isPlaying: playerState.isPlaying,

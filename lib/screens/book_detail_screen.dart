@@ -1,8 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../db/database.dart';
 import '../mock/mock_data.dart';
+import '../models/audio_version.dart';
+import '../models/book.dart';
 import '../providers/books_provider.dart';
+import '../screens/loading_screen.dart';
 import '../widgets/language_badge.dart';
 
 class BookDetailScreen extends ConsumerWidget {
@@ -26,13 +31,21 @@ class BookDetailScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+              // Cover image or placeholder
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 200,
+                  child: book.coverPath != null
+                      ? Image.file(
+                          File(book.coverPath!),
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              _coverPlaceholder(context),
+                        )
+                      : _coverPlaceholder(context),
                 ),
-                child: const Center(child: Icon(Icons.menu_book, size: 72)),
               ),
               const SizedBox(height: 16),
               Text(book.title,
@@ -54,15 +67,15 @@ class BookDetailScreen extends ConsumerWidget {
                           trailing: v.status == 'ready'
                               ? IconButton(
                                   icon: const Icon(Icons.play_circle_filled),
-                                  onPressed: () => context
-                                      .push('/player/${v.versionId}'),
+                                  onPressed: () =>
+                                      context.push('/player/${v.versionId}'),
                                 )
                               : null,
                         )),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
                       onPressed: () =>
-                          _showNewLanguageSheet(context, bookId),
+                          _showNewLanguageSheet(context, book),
                       icon: const Icon(Icons.add),
                       label: const Text('New Language'),
                     ),
@@ -76,24 +89,31 @@ class BookDetailScreen extends ConsumerWidget {
     );
   }
 
+  Widget _coverPlaceholder(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: const Center(child: Icon(Icons.menu_book, size: 72)),
+    );
+  }
+
   String _languageName(String code) =>
       supportedLanguages.firstWhere(
         (l) => l['code'] == code,
         orElse: () => {'code': code, 'name': code},
       )['name']!;
 
-  void _showNewLanguageSheet(BuildContext context, String bookId) {
+  void _showNewLanguageSheet(BuildContext context, Book book) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _NewLanguageSheet(bookId: bookId),
+      builder: (_) => _NewLanguageSheet(book: book),
     );
   }
 }
 
 class _NewLanguageSheet extends StatefulWidget {
-  final String bookId;
-  const _NewLanguageSheet({required this.bookId});
+  final Book book;
+  const _NewLanguageSheet({required this.book});
 
   @override
   State<_NewLanguageSheet> createState() => _NewLanguageSheetState();
@@ -106,8 +126,8 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding:
-          EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,8 +140,8 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
             decoration: const InputDecoration(
                 labelText: 'Language', border: OutlineInputBorder()),
             items: supportedLanguages
-                .map((l) => DropdownMenuItem(
-                    value: l['code'], child: Text(l['name']!)))
+                .map((l) =>
+                    DropdownMenuItem(value: l['code'], child: Text(l['name']!)))
                 .toList(),
             onChanged: (v) => setState(() => _language = v!),
           ),
@@ -140,9 +160,37 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () {
+              onPressed: () async {
+                final versionId =
+                    AudioVersion.makeVersionId(widget.book.bookId, _language);
+                await AppDatabase.instance.insertAudioVersion(AudioVersion(
+                  versionId: versionId,
+                  bookId: widget.book.bookId,
+                  language: _language,
+                  llmProvider: _llmProvider,
+                  scriptJson: '{}',
+                  audioDir: '',
+                  status: 'generating',
+                  lastGeneratedLine: 0,
+                  lastPlayedLine: 0,
+                  createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                ));
+                if (!context.mounted) return;
                 Navigator.pop(context);
-                context.push('/loading/${widget.bookId}/$_language');
+                if (!context.mounted) return;
+                context.push(
+                  '/loading',
+                  extra: LoadingParams(
+                    bookId: widget.book.bookId,
+                    versionId: versionId,
+                    filePath: widget.book.pagesDir,
+                    language: _language,
+                    vlmProvider: widget.book.vlmProvider,
+                    llmProvider: _llmProvider,
+                    isNewBook: false,
+                    lastGeneratedLine: -1,
+                  ),
+                );
               },
               child: const Text('Generate'),
             ),

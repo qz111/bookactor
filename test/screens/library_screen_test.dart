@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:bookactor/models/book.dart';
 import 'package:bookactor/providers/books_provider.dart';
 import 'package:bookactor/screens/library_screen.dart';
+import 'package:bookactor/widgets/book_card.dart';
 
 void main() {
   testWidgets('shows book title when books exist', (tester) async {
@@ -87,5 +89,58 @@ void main() {
     await tester.tap(find.text('Add Book'));
     await tester.pumpAndSettle();
     expect(find.text('Upload Screen'), findsOneWidget);
+  });
+
+  testWidgets('BookCard shows icon fallback when coverPath is null', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BookCard(
+            book: const Book(
+              bookId: 'b1',
+              title: 'Test',
+              coverPath: null,
+              pagesDir: '',
+              vlmOutput: '[]',
+              vlmProvider: 'gemini',
+              createdAt: 0,
+            ),
+            languageCount: 1,
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.menu_book), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+  });
+
+  testWidgets('BookCard shows Image.file when coverPath is set', (tester) async {
+    // Use the pre-existing valid PNG from test assets
+    final file = File('test/assets/fake_image.png');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BookCard(
+            book: Book(
+              bookId: 'b2',
+              title: 'Covered',
+              coverPath: file.path,
+              pagesDir: '',
+              vlmOutput: '[]',
+              vlmProvider: 'gemini',
+              createdAt: 0,
+            ),
+            languageCount: 0,
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    // Image widget present (even if not fully decoded)
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book), findsNothing);
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/book.dart';
 
@@ -23,30 +24,44 @@ class BookCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Container(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: const Center(child: Icon(Icons.menu_book, size: 48)),
-              ),
+              child: book.coverPath != null
+                  ? Image.file(
+                      File(book.coverPath!),
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _iconPlaceholder(context),
+                    )
+                  : _iconPlaceholder(context),
             ),
             Padding(
               padding: const EdgeInsets.all(8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(book.title,
-                      style: Theme.of(context).textTheme.titleSmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    book.title,
+                    style: Theme.of(context).textTheme.titleSmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 4),
                   Text(
-                      '$languageCount language${languageCount != 1 ? 's' : ''}',
-                      style: Theme.of(context).textTheme.bodySmall),
+                    '$languageCount language${languageCount != 1 ? 's' : ''}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _iconPlaceholder(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: const Center(child: Icon(Icons.menu_book, size: 48)),
     );
   }
 }

@@ -1,14 +1,18 @@
 import 'dart:io';
+
 import 'package:crypto/crypto.dart';
-import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+
 import '../db/database.dart';
 import '../mock/mock_data.dart';
 import '../models/audio_version.dart';
 import '../models/book.dart';
 import '../screens/loading_screen.dart';
+import '../services/pdf_service.dart';
 
 class UploadScreen extends ConsumerStatefulWidget {
   const UploadScreen({super.key});
@@ -55,6 +59,19 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         vlmProvider: _vlmProvider,
         createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       ));
+
+      // Extract cover from first PDF page (non-fatal if it fails)
+      try {
+        final pages = await PdfService.pdfToJpegBytes(_selectedFilePath!);
+        if (pages.isNotEmpty) {
+          final dir = await getApplicationDocumentsDirectory();
+          final coverFile = File('${dir.path}/${bookId}_cover.jpg');
+          await coverFile.writeAsBytes(pages.first);
+          await AppDatabase.instance.updateBookCoverPath(bookId, coverFile.path);
+        }
+      } catch (e) {
+        debugPrint('Cover extraction failed (non-fatal): $e');
+      }
 
       // Insert generating audio_version placeholder
       final versionId = '${bookId}_$_language';

@@ -75,6 +75,19 @@ class AppDatabase {
     );
   }
 
+  /// Updates the cover_path column for a book after cover extraction on import.
+  /// Called after PdfService renders the first PDF page; treat as best-effort
+  /// (caller catches failures and continues without cover).
+  Future<void> updateBookCoverPath(String bookId, String path) async {
+    final db = await database;
+    await db.update(
+      'books',
+      {'cover_path': path},
+      where: 'book_id = ?',
+      whereArgs: [bookId],
+    );
+  }
+
   Future<Book?> getBook(String bookId) async {
     final db = await database;
     final rows =
