@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from typing import Annotated
 from backend.services.vlm_service import analyze_pages
@@ -20,7 +21,8 @@ async def analyze(
     """
     image_bytes_list = [await img.read() for img in images]
     try:
-        pages = analyze_pages(
+        pages = await asyncio.to_thread(
+            analyze_pages,
             image_bytes_list=image_bytes_list,
             vlm_provider=vlm_provider,
         )
