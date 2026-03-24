@@ -12,6 +12,7 @@ import '../mock/mock_data.dart';
 import '../models/audio_version.dart';
 import '../models/book.dart';
 import '../models/processing_mode.dart';
+import '../providers/settings_provider.dart';
 import '../screens/loading_screen.dart';
 import '../services/pdf_service.dart';
 
@@ -112,6 +113,11 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final keysAsync = ref.watch(apiKeysProvider);
+    final hasKeys = keysAsync.valueOrNull != null &&
+        keysAsync.valueOrNull!.openAi.isNotEmpty &&
+        keysAsync.valueOrNull!.google.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Add Book')),
       body: ListView(
@@ -207,12 +213,22 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           ),
           const SizedBox(height: 32),
           FilledButton.icon(
-            onPressed: (_selectedFilePath == null || _processingMode == null || _isGenerating)
+            onPressed: (!hasKeys || _selectedFilePath == null || _processingMode == null || _isGenerating)
                 ? null
                 : _generate,
             icon: const Icon(Icons.auto_awesome),
             label: const Text('Generate Audiobook'),
           ),
+          if (!hasKeys) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Add API keys in Settings to generate.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
       ),
     );
