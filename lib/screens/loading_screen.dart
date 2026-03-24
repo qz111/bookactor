@@ -27,7 +27,7 @@ class LoadingParams {
   /// Optional override for the audio output directory (useful in tests).
   final String? audioDirOverride;
   /// Optional list of image paths for multi-image mode.
-  /// When non-null, these files are read in order instead of [filePath].
+  /// When non-null and non-empty, these files are read in order instead of [filePath].
   final List<String>? imageFilePaths;
 
   const LoadingParams({

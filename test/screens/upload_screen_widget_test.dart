@@ -32,6 +32,11 @@ void main() {
     expect(find.text('Add more images'), findsOneWidget);
     // Should NOT show the "Tap to select PDF or images" placeholder
     expect(find.text('Tap to select PDF or images'), findsNothing);
+    // Page number badges should be visible
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    // Delete buttons should be present
+    expect(find.byIcon(Icons.delete_outline), findsNWidgets(2));
   });
 
   testWidgets('UploadScreen renders without error in default state',

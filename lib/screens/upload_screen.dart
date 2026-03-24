@@ -39,7 +39,11 @@ class UploadScreen extends ConsumerStatefulWidget {
 class _UploadScreenState extends ConsumerState<UploadScreen> {
   String? _pdfPath;
   List<String> _imagePaths = [];
+  String _language = 'en';
+  String _vlmProvider = 'gemini';
+  String _llmProvider = 'gpt4o';
   bool _isGenerating = false;
+  ProcessingMode? _processingMode;
 
   @override
   void initState() {
@@ -48,10 +52,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       _imagePaths = List<String>.from(widget.initialImagePaths);
     }
   }
-  String _language = 'en';
-  String _vlmProvider = 'gemini';
-  String _llmProvider = 'gpt4o';
-  ProcessingMode? _processingMode;
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
