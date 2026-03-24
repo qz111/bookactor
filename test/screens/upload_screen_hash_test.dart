@@ -22,4 +22,22 @@ void main() {
     final d2 = sha256.convert(utf8.encode('xyz')).toString();
     expect(d1, isNot(equals(d2)));
   });
+
+  test('SHA-256 of concatenated multi-image bytes differs from single image', () {
+    final img1 = Uint8List.fromList([1, 2, 3]);
+    final img2 = Uint8List.fromList([4, 5, 6]);
+    final combined = Uint8List.fromList([...img1, ...img2]);
+    final multiHash = sha256.convert(combined).toString();
+    final singleHash = sha256.convert(img1).toString();
+    expect(multiHash, isNot(equals(singleHash)));
+  });
+
+  test('SHA-256 of concatenated multi-image bytes is deterministic', () {
+    final img1 = Uint8List.fromList([1, 2, 3]);
+    final img2 = Uint8List.fromList([4, 5, 6]);
+    final combined = Uint8List.fromList([...img1, ...img2]);
+    final hash1 = sha256.convert(combined).toString();
+    final hash2 = sha256.convert(combined).toString();
+    expect(hash1, equals(hash2));
+  });
 }

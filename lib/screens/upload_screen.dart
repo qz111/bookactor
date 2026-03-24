@@ -1,10 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as path_pkg;
 import 'package:path_provider/path_provider.dart';
 
 import '../db/database.dart';
@@ -24,8 +27,8 @@ class UploadScreen extends ConsumerStatefulWidget {
 }
 
 class _UploadScreenState extends ConsumerState<UploadScreen> {
-  String? _selectedFileName;
-  String? _selectedFilePath;
+  String? _pdfPath;
+  List<String> _imagePaths = [];
   bool _isGenerating = false;
   String _language = 'en';
   String _vlmProvider = 'gemini';
@@ -36,47 +39,116 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      allowMultiple: true,
     );
-    if (result != null) {
-      setState(() {
-        _selectedFileName = result.files.single.name;
-        _selectedFilePath = result.files.single.path;
-      });
-    }
+    if (result == null || result.files.isEmpty) return;
+
+    final hasPdf = result.files.any(
+      (f) => f.name.toLowerCase().endsWith('.pdf'),
+    );
+
+    setState(() {
+      if (hasPdf) {
+        // Use first PDF; ignore any other files in this pick.
+        final pdfFile = result.files.firstWhere(
+          (f) => f.name.toLowerCase().endsWith('.pdf'),
+        );
+        _pdfPath = pdfFile.path;
+        _imagePaths = [];
+      } else {
+        _pdfPath = null;
+        final newPaths = result.files
+            .where((f) => f.path != null)
+            .map((f) => f.path!)
+            .toList();
+        // Append, deduplicating by absolute path.
+        final seen = Set<String>.from(_imagePaths);
+        for (final p in newPaths) {
+          if (seen.add(p)) _imagePaths.add(p);
+        }
+        // Enforce 50-image cap.
+        if (_imagePaths.length > 50) {
+          _imagePaths = _imagePaths.sublist(0, 50);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Maximum 50 images supported. Extra images were removed.',
+                  ),
+                ),
+              );
+            }
+          });
+        }
+      }
+    });
   }
 
   Future<void> _generate() async {
-    if (_selectedFilePath == null || _processingMode == null) return;
+    final isMultiImage = _imagePaths.isNotEmpty;
+    if ((!isMultiImage && _pdfPath == null) || _processingMode == null) return;
     setState(() => _isGenerating = true);
     try {
-      final fileBytes = await File(_selectedFilePath!).readAsBytes();
-      final bookId = sha256.convert(fileBytes).toString();
+      // ── Build primary path and pagesDir ─────────────────────────────────
+      final String primaryPath;
+      final String bookTitle;
+      final String pagesDir;
+      if (isMultiImage) {
+        primaryPath = _imagePaths.first;
+        bookTitle = path_pkg.basename(_imagePaths.first);
+        pagesDir = jsonEncode(_imagePaths);
+      } else {
+        primaryPath = _pdfPath!;
+        bookTitle = path_pkg.basename(_pdfPath!);
+        pagesDir = _pdfPath!;
+      }
 
-      // Persist the book row (vlm_output populated after /analyze in LoadingScreen)
+      // ── Compute book ID ──────────────────────────────────────────────────
+      final List<Uint8List> allBytes;
+      if (isMultiImage) {
+        allBytes = await Future.wait(
+          _imagePaths.map((p) => File(p).readAsBytes()),
+        );
+      } else {
+        allBytes = [await File(_pdfPath!).readAsBytes()];
+      }
+      final combined =
+          Uint8List.fromList(allBytes.expand((b) => b).toList());
+      final bookId = sha256.convert(combined).toString();
+
+      // ── Persist book row ─────────────────────────────────────────────────
       await AppDatabase.instance.insertBook(Book(
         bookId: bookId,
-        title: _selectedFileName ?? 'Untitled',
+        title: bookTitle,
         coverPath: null,
-        pagesDir: _selectedFilePath!,
+        pagesDir: pagesDir,
         vlmOutput: '',
         vlmProvider: _vlmProvider,
         createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       ));
 
-      // Extract cover from first PDF page (non-fatal if it fails)
+      // ── Cover extraction (non-fatal) ─────────────────────────────────────
       try {
-        final pages = await PdfService.pdfToJpegBytes(_selectedFilePath!);
-        if (pages.isNotEmpty) {
-          final dir = await getApplicationDocumentsDirectory();
-          final coverFile = File('${dir.path}/${bookId}_cover.jpg');
-          await coverFile.writeAsBytes(pages.first);
-          await AppDatabase.instance.updateBookCoverPath(bookId, coverFile.path);
+        final dir = await getApplicationDocumentsDirectory();
+        final coverFile = File('${dir.path}/${bookId}_cover.jpg');
+        if (isMultiImage) {
+          await coverFile.writeAsBytes(allBytes.first);
+          await AppDatabase.instance.updateBookCoverPath(
+              bookId, coverFile.path);
+        } else {
+          final pages = await PdfService.pdfToJpegBytes(_pdfPath!);
+          if (pages.isNotEmpty) {
+            await coverFile.writeAsBytes(pages.first);
+            await AppDatabase.instance.updateBookCoverPath(
+                bookId, coverFile.path);
+          }
         }
       } catch (e) {
         debugPrint('Cover extraction failed (non-fatal): $e');
       }
 
-      // Insert generating audio_version placeholder
+      // ── Insert audio version placeholder ─────────────────────────────────
       final versionId = '${bookId}_$_language';
       await AppDatabase.instance.insertAudioVersion(AudioVersion(
         versionId: versionId,
@@ -97,13 +169,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         extra: LoadingParams(
           bookId: bookId,
           versionId: versionId,
-          filePath: _selectedFilePath!,
+          filePath: primaryPath,
           language: _language,
           vlmProvider: _vlmProvider,
           llmProvider: _llmProvider,
           processingMode: _processingMode!,
           isNewBook: true,
           lastGeneratedLine: -1,
+          imageFilePaths: isMultiImage ? _imagePaths : null,
         ),
       );
     } finally {
@@ -171,7 +244,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   children: [
                     const Icon(Icons.upload_file, size: 40),
                     const SizedBox(height: 8),
-                    Text(_selectedFileName ?? 'Tap to select PDF or images'),
+                    Text(_pdfPath != null ? path_pkg.basename(_pdfPath!) : 'Tap to select PDF or images'),
                   ],
                 ),
               ),
@@ -213,7 +286,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           ),
           const SizedBox(height: 32),
           FilledButton.icon(
-            onPressed: (!hasKeys || _selectedFilePath == null || _processingMode == null || _isGenerating)
+            onPressed: (!hasKeys ||
+                    (_pdfPath == null && _imagePaths.isEmpty) ||
+                    _processingMode == null ||
+                    _isGenerating)
                 ? null
                 : _generate,
             icon: const Icon(Icons.auto_awesome),
