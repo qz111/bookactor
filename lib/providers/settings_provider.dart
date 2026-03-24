@@ -11,7 +11,7 @@ final settingsServiceProvider = Provider<SettingsService>((ref) {
 /// Invalidate this after saveKeys() to rebuild apiServiceProvider.
 final apiKeysProvider =
     FutureProvider<({String openAi, String google})>((ref) async {
-  return ref.read(settingsServiceProvider).getKeys();
+  return ref.watch(settingsServiceProvider).getKeys();
 });
 
 /// Builds ApiService pre-loaded with the saved API keys.
