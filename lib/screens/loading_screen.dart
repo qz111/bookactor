@@ -90,6 +90,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
   Future<void> _runLivePipeline() async {
     final p = widget.params!;
+    // TODO(Task 9): replace empty-string keys with provider-sourced keys via apiServiceProvider.
     final api = widget.apiService ?? ApiService(baseUrl: 'http://localhost:8000', openAiKey: '', googleKey: '');
 
     try {
