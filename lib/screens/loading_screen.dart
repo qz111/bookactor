@@ -90,7 +90,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
   Future<void> _runLivePipeline() async {
     final p = widget.params!;
-    final api = widget.apiService ?? ApiService(baseUrl: 'http://localhost:8000');
+    final api = widget.apiService ?? ApiService(baseUrl: 'http://localhost:8000', openAiKey: '', googleKey: '');
 
     try {
       setState(() => _step = 0);

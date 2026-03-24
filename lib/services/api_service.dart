@@ -13,10 +13,16 @@ class ApiException implements Exception {
 
 class ApiService {
   final String baseUrl;
+  final String openAiKey;
+  final String googleKey;
   final http.Client client;
 
-  ApiService({required this.baseUrl, http.Client? client})
-      : client = client ?? http.Client();
+  ApiService({
+    required this.baseUrl,
+    required this.openAiKey,
+    required this.googleKey,
+    http.Client? client,
+  }) : client = client ?? http.Client();
 
   Future<List<Map<String, dynamic>>> analyzePages({
     required List<Uint8List> imageBytesList,
@@ -25,7 +31,9 @@ class ApiService {
   }) async {
     final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/analyze'))
       ..fields['vlm_provider'] = vlmProvider
-      ..fields['processing_mode'] = processingMode.toApiValue();
+      ..fields['processing_mode'] = processingMode.toApiValue()
+      ..fields['openai_api_key'] = openAiKey
+      ..fields['google_api_key'] = googleKey;
     for (int i = 0; i < imageBytesList.length; i++) {
       request.files.add(http.MultipartFile.fromBytes(
         'images',
@@ -52,11 +60,13 @@ class ApiService {
         'vlm_output': vlmOutput,
         'language': language,
         'llm_provider': llmProvider,
+        'openai_api_key': openAiKey,
+        'google_api_key': googleKey,
       }),
     );
     _checkStatus(response);
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return Map<String, dynamic>.from(data['script'] as Map);
+    return data['script'] as Map<String, dynamic>;
   }
 
   Future<List<Map<String, dynamic>>> generateAudio({
@@ -65,15 +75,17 @@ class ApiService {
     final response = await client.post(
       Uri.parse('$baseUrl/tts'),
       headers: {'content-type': 'application/json'},
-      body: jsonEncode({'lines': lines}),
+      body: jsonEncode({
+        'lines': lines,
+        'openai_api_key': openAiKey,
+      }),
     );
     _checkStatus(response);
-    final data = jsonDecode(response.body) as List;
-    return List<Map<String, dynamic>>.from(data);
+    return List<Map<String, dynamic>>.from(jsonDecode(response.body) as List);
   }
 
   void _checkStatus(http.Response response) {
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode != 200) {
       throw ApiException(response.statusCode, response.body);
     }
   }

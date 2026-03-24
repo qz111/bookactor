@@ -15,7 +15,7 @@ import 'package:bookactor/services/api_service.dart';
 
 class _RecordingApiService extends ApiService {
   final List<String> calls = [];
-  _RecordingApiService() : super(baseUrl: 'http://fake');
+  _RecordingApiService() : super(baseUrl: 'http://fake', openAiKey: 'test', googleKey: 'test');
 
   @override
   Future<List<Map<String, dynamic>>> analyzePages({
