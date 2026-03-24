@@ -40,9 +40,18 @@ Three new Riverpod providers in `lib/providers/settings_provider.dart`:
 |---|---|---|
 | `settingsServiceProvider` | `Provider<SettingsService>` | Singleton service instance |
 | `apiKeysProvider` | `FutureProvider<({String openAi, String google})>` | Loads keys from secure storage; invalidated after `saveKeys()` |
-| `apiServiceProvider` | `FutureProvider<ApiService>` | Builds `ApiService` with keys from `apiKeysProvider` |
+| `apiServiceProvider` | `FutureProvider<ApiService>` | Builds `ApiService(baseUrl: 'http://localhost:8000', openAiKey: keys.openAi, googleKey: keys.google)` from `apiKeysProvider` |
+| `initialLocationProvider` | `Provider<String>` | Initial GoRouter location; overridden in `main.dart` with pre-loaded `hasKeys()` result |
 
-`LoadingScreen` switches from constructing `ApiService(baseUrl: ...)` directly to watching `apiServiceProvider`. `LoadingParams` stays unchanged.
+### ApiService wiring in LoadingScreen
+
+`LoadingScreen` becomes a `ConsumerStatefulWidget` and its state class becomes `ConsumerState<LoadingScreen>` (giving `ref` access in all state methods). The existing optional `ApiService? apiService` constructor parameter is **retained** for test injection. `_runLivePipeline` resolves the service as follows:
+
+```dart
+final api = widget.apiService ?? await ref.read(apiServiceProvider.future);
+```
+
+This preserves backward compatibility with `loading_screen_live_test.dart`, which passes `apiService: fakeApi` directly. No provider override is required in that test — the constructor injection path continues to work unchanged.
 
 ---
 
@@ -53,7 +62,7 @@ Three new Riverpod providers in `lib/providers/settings_provider.dart`:
 - Route: `/settings`
 - Two `TextField` widgets, both obscured (password-style) with a show/hide toggle
 - Labels: "OpenAI API Key", "Google API Key"
-- On open: pre-fills fields with existing saved keys (if any)
+- On open: pre-fills fields by watching `ref.watch(apiKeysProvider)` — when the async value resolves, the controllers are populated with existing saved keys (if any)
 - "Save" button: disabled until both fields are non-empty
 - On save: calls `settingsService.saveKeys()`, invalidates `apiKeysProvider`, then:
   - On first launch: navigates to `/` (library)
@@ -64,20 +73,60 @@ Three new Riverpod providers in `lib/providers/settings_provider.dart`:
 
 ## Navigation & Enforcement
 
-**Always-accessible entry point:**
-- Gear icon (`Icons.settings`) added to the `AppBar` of `LibraryScreen` → pushes `/settings`
+### First-launch redirect
 
-**First-launch redirect:**
-- App starts at `/settings` by default (`initialLocation: '/settings'`)
-- After saving keys, navigates to `/` (library)
-- On subsequent launches, `app.dart` checks `hasKeys()` at startup; if true, `initialLocation` is `/`
+`main.dart` awaits `SettingsService().hasKeys()` **before** calling `runApp()`. The boolean result is passed to `BookActorApp` and forwarded to `routerProvider` as a constructor argument (or via a `Provider<bool>` override). `routerProvider` uses it to set `initialLocation`:
 
-This avoids async GoRouter `redirect` complexity — the initial location is determined once at app startup before the router is constructed, using a `FutureProvider` or a pre-loaded value in `main.dart`.
+```dart
+// In main.dart — SettingsService() is constructed once here before runApp().
+// A second instance is created later by settingsServiceProvider at runtime.
+// This is safe because flutter_secure_storage reads from the OS store on every
+// call; there is no in-memory state to keep in sync between the two instances.
+final hasKeys = await SettingsService().hasKeys();
+runApp(ProviderScope(
+  overrides: [initialLocationProvider.overrideWithValue(hasKeys ? '/' : '/settings')],
+  child: const BookActorApp(),
+));
 
-**Upload screen guard:**
-- Generate button is already disabled by `_processingMode == null || _selectedFilePath == null`
-- Add a third condition: `apiKeysProvider` is not yet loaded or keys are empty
-- Hint text below the button when keys are missing: "Add API keys in Settings to generate."
+// In app.dart — imports initialLocationProvider from lib/providers/settings_provider.dart
+final routerProvider = Provider<GoRouter>((ref) {
+  final initialLocation = ref.watch(initialLocationProvider);
+  return GoRouter(
+    initialLocation: initialLocation,
+    routes: [...],
+  );
+});
+
+// In lib/providers/settings_provider.dart
+final initialLocationProvider = Provider<String>((_) => '/');
+```
+
+On subsequent launches where keys are already saved, the app opens directly at `/` (library). No async redirect is needed at runtime.
+
+### Always-accessible entry point
+
+Gear icon (`Icons.settings`) added to the `AppBar` of `LibraryScreen` → pushes `/settings`.
+
+### Upload screen guard
+
+`UploadScreen` is already a `ConsumerStatefulWidget`. The Generate button guard adds a third condition using `ref.watch(apiKeysProvider)`:
+
+```dart
+final keysAsync = ref.watch(apiKeysProvider);
+final hasKeys = keysAsync.valueOrNull != null &&
+    keysAsync.valueOrNull!.openAi.isNotEmpty &&
+    keysAsync.valueOrNull!.google.isNotEmpty;
+
+onPressed: (!hasKeys || _selectedFilePath == null || _processingMode == null || _isGenerating)
+    ? null
+    : _generate,
+```
+
+Hint text below the button when keys are missing: "Add API keys in Settings to generate."
+
+### Resume navigation (LibraryScreen)
+
+The cold-start resume flow in `LibraryScreen` constructs `LoadingParams` and pushes `/loading` unchanged. Key injection is handled inside `LoadingScreen` via `apiServiceProvider` — the resume path is unaffected.
 
 ---
 
@@ -94,9 +143,9 @@ ApiService({
 })
 ```
 
-Each method includes the relevant key(s) in the request body:
+Each method reads keys from `this.openAiKey` / `this.googleKey` (constructor fields) and includes them in the request body. No new method-level parameters are added to `analyzePages()`, `generateScript()`, or `generateAudio()`.
 
-| Method | Added fields |
+| Method | Added body fields (sent from constructor fields) |
 |---|---|
 | `analyzePages()` | `openai_api_key`, `google_api_key` (multipart form fields) |
 | `generateScript()` | `openai_api_key`, `google_api_key` (JSON body) |
@@ -109,8 +158,9 @@ Each method includes the relevant key(s) in the request body:
 ### Routers
 
 **`/analyze` (multipart form):**
-- Accept new form fields: `openai_api_key: str`, `google_api_key: str`
-- Pass both to `analyze_pages()`
+- The Flutter client already sends `processing_mode` as a form field (added in the processing-mode-selection feature), but the backend router and `vlm_service.py` do not yet accept or use it. This gap is resolved as part of this feature.
+- Final accepted form fields: `vlm_provider`, `processing_mode`, `openai_api_key`, `google_api_key`
+- Passes `processing_mode` and the relevant key to `analyze_pages()`
 
 **`/script` (JSON body):**
 - Add `openai_api_key: str`, `google_api_key: str` to the Pydantic request model
@@ -123,19 +173,20 @@ Each method includes the relevant key(s) in the request body:
 ### Services
 
 **`vlm_service.py`:**
-- `analyze_pages()` accepts `openai_api_key` and `google_api_key`
+- `analyze_pages()` accepts `processing_mode: str`, `openai_api_key: str`, and `google_api_key: str`
+- Uses `processing_mode` to select the appropriate VLM prompt strategy (OCR-focused for `text_heavy`, visual-narrative for `picture_book`)
 - Passes the relevant key to `litellm.completion(api_key=...)` based on provider:
   - `gpt4o` → `openai_api_key`
   - `gemini` → `google_api_key`
 
 **`llm_service.py`:**
-- `generate_script()` accepts `openai_api_key` and `google_api_key`
+- `generate_script()` accepts `openai_api_key: str` and `google_api_key: str`
 - Same routing logic as VLM service
 
 **`tts_service.py`:**
 - Remove the module-level `_tts_client = AsyncOpenAI(api_key=OPENAI_API_KEY)` singleton
-- `generate_audio()` accepts `openai_api_key`
-- Creates `AsyncOpenAI(api_key=openai_api_key)` per-request
+- `generate_audio()` accepts `openai_api_key: str`
+- Creates `AsyncOpenAI(api_key=openai_api_key)` **once** inside `generate_audio()` and passes it down to `_generate_one(client, line)` — one client per request, not one per line
 
 ### config.py / .env
 
@@ -150,7 +201,7 @@ Each method includes the relevant key(s) in the request body:
 | Keys missing at generate time | Generate button disabled; hint text: "Add API keys in Settings to generate." |
 | Invalid key → backend 401/403 | Caught by existing `ApiException` handler in `_runLivePipeline()`; shows existing error screen |
 | `flutter_secure_storage` save failure | `SnackBar("Failed to save keys. Please try again.")` |
-| First-launch: app opens before keys are set | `initialLocation: '/settings'` ensures user lands on Settings |
+| First-launch: app opens before keys are set | `initialLocation: '/settings'` via pre-loaded `hasKeys()` in `main.dart` |
 
 ---
 
@@ -161,32 +212,33 @@ Each method includes the relevant key(s) in the request body:
 | File | Change |
 |---|---|
 | `lib/services/settings_service.dart` | **New** — `SettingsService` wrapping `flutter_secure_storage` |
-| `lib/providers/settings_provider.dart` | **New** — `settingsServiceProvider`, `apiKeysProvider`, `apiServiceProvider` |
+| `lib/providers/settings_provider.dart` | **New** — `settingsServiceProvider`, `apiKeysProvider`, `apiServiceProvider`, `initialLocationProvider` |
 | `lib/screens/settings_screen.dart` | **New** — Settings UI with two key fields and Save button |
 | `lib/services/api_service.dart` | Add `openAiKey`, `googleKey` constructor fields; include in request bodies |
-| `lib/app.dart` | Add `/settings` route; dynamic `initialLocation` based on `hasKeys()` |
+| `lib/main.dart` | Await `hasKeys()` before `runApp()`; pass result via `initialLocationProvider` override |
+| `lib/app.dart` | Add `/settings` route; `routerProvider` reads `initialLocationProvider` |
 | `lib/screens/library_screen.dart` | Add gear icon to AppBar |
-| `lib/screens/loading_screen.dart` | Switch to `apiServiceProvider` instead of constructing `ApiService` directly |
-| `lib/screens/upload_screen.dart` | Add keys guard to Generate button; add hint text |
+| `lib/screens/loading_screen.dart` | Becomes `ConsumerStatefulWidget`; `_runLivePipeline` resolves `ApiService` via `widget.apiService ?? await ref.read(apiServiceProvider.future)` |
+| `lib/screens/upload_screen.dart` | Add `apiKeysProvider` guard to Generate button via `ref.watch(apiKeysProvider).valueOrNull`; add hint text |
 | `pubspec.yaml` | Add `flutter_secure_storage` dependency |
 
 ### Backend
 
 | File | Change |
 |---|---|
-| `backend/routers/analyze.py` | Accept `openai_api_key`, `google_api_key` form fields |
-| `backend/routers/script.py` | Add key fields to request model |
+| `backend/routers/analyze.py` | Add `openai_api_key`, `google_api_key` form fields (retain `vlm_provider`, `processing_mode`) |
+| `backend/routers/script.py` | Add `openai_api_key`, `google_api_key` to request model |
 | `backend/routers/tts.py` | Add `openai_api_key` to `TtsRequest` |
-| `backend/services/vlm_service.py` | Pass `api_key` to `litellm.completion()` |
-| `backend/services/llm_service.py` | Pass `api_key` to `litellm.completion()` |
-| `backend/services/tts_service.py` | Remove module-level client; create per-request `AsyncOpenAI` |
+| `backend/services/vlm_service.py` | Accept and pass `api_key` to `litellm.completion()` |
+| `backend/services/llm_service.py` | Accept and pass `api_key` to `litellm.completion()` |
+| `backend/services/tts_service.py` | Remove module-level client; create per-request client in `generate_audio()`, pass to `_generate_one()` |
 
 ### Tests
 
 | File | Change |
 |---|---|
-| `test/services/api_service_test.dart` | Add `openAiKey`, `googleKey` to `ApiService` constructor calls; assert keys sent in bodies |
-| `test/screens/loading_screen_live_test.dart` | Update `_RecordingApiService` constructor and `apiServiceProvider` wiring |
+| `test/services/api_service_test.dart` | Add `openAiKey`, `googleKey` to `ApiService` constructor calls; assert keys sent in request bodies |
+| `test/screens/loading_screen_live_test.dart` | `LoadingScreen` is now `ConsumerStatefulWidget` (no test change needed for this); `_RecordingApiService` subclass is retained and passed via existing `apiService:` constructor param. Update `_RecordingApiService`'s super constructor call: `super(baseUrl: 'http://fake', openAiKey: 'test', googleKey: 'test')` |
 | `tests/test_analyze.py` | Add `openai_api_key`, `google_api_key` to test requests |
 | `tests/test_script.py` | Add keys to test requests |
 | `tests/test_tts.py` | Add `openai_api_key` to test requests |
