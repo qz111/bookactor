@@ -13,15 +13,11 @@ class TtsLine(BaseModel):
 
 class TtsRequest(BaseModel):
     lines: list[TtsLine]
+    openai_api_key: str
 
 
 @router.post("/tts")
 async def tts(req: TtsRequest):
-    """Generate TTS audio for all lines in parallel.
-
-    Returns:
-        List of results: [{"index": int, "status": "ready", "audio_b64": str}, ...]
-        Error lines: {"index": int, "status": "error"}  — no audio_b64
-    """
+    """Generate TTS audio for all lines in parallel."""
     lines = [line.model_dump() for line in req.lines]
-    return await generate_audio(lines)
+    return await generate_audio(lines=lines, openai_api_key=req.openai_api_key)
