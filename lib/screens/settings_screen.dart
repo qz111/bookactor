@@ -54,7 +54,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       } else {
         context.go('/');
       }
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('SettingsScreen._save failed: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to save keys. Please try again.')),
