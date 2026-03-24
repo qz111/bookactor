@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as path_pkg;
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../db/database.dart';
+import '../providers/settings_provider.dart';
 import '../models/audio_version.dart';
 import '../models/processing_mode.dart';
 import '../services/api_service.dart';
@@ -39,7 +41,7 @@ class LoadingParams {
   });
 }
 
-class LoadingScreen extends StatefulWidget {
+class LoadingScreen extends ConsumerStatefulWidget {
   final String bookId;
   final String language;
   final LoadingParams? params;
@@ -54,10 +56,10 @@ class LoadingScreen extends StatefulWidget {
   });
 
   @override
-  State<LoadingScreen> createState() => _LoadingScreenState();
+  ConsumerState<LoadingScreen> createState() => _LoadingScreenState();
 }
 
-class _LoadingScreenState extends State<LoadingScreen> {
+class _LoadingScreenState extends ConsumerState<LoadingScreen> {
   int _step = 0; // 0=not started, 1=reading done, 2=scripting done, 3=done
   bool _hasError = false;
 
@@ -90,8 +92,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
   Future<void> _runLivePipeline() async {
     final p = widget.params!;
-    // TODO(Task 9): replace empty-string keys with provider-sourced keys via apiServiceProvider.
-    final api = widget.apiService ?? ApiService(baseUrl: 'http://localhost:8000', openAiKey: '', googleKey: '');
+    final api = (widget.apiService ?? await ref.read(apiServiceProvider.future))!;
 
     try {
       setState(() => _step = 0);
