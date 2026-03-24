@@ -20,13 +20,17 @@ Three files change: `upload_screen.dart`, `loading_screen.dart` (including `Load
 Replace the single-path fields with a union:
 
 ```dart
-String? _pdfPath;           // set when user picks a .pdf
+String? _pdfPath;              // set when user picks a .pdf
 List<String> _imagePaths = []; // set when user picks images
 ```
 
 The two fields are mutually exclusive. Picking a PDF clears `_imagePaths`; picking images clears `_pdfPath`.
 
+**Book title:** `Book.title` is set to the first image's filename (e.g. `"page1.jpg"`) for multi-image mode.
+
 ### LoadingParams
+
+`filePath` remains `required String` and non-nullable. For multi-image mode, pass `_imagePaths.first` as `filePath`.
 
 Add one new nullable field:
 
@@ -34,17 +38,19 @@ Add one new nullable field:
 final List<String>? imageFilePaths;
 ```
 
-- `null` → PDF mode (use existing `filePath`)
-- non-null → multi-image mode (ignore `filePath` for reading; `filePath` may hold first image path for display)
+- `null` → PDF mode (use existing `filePath` for reading), or resume mode (VLM output already cached)
+- non-null → multi-image new-book mode (read bytes from `imageFilePaths` in order)
+
+**Resume flow (`isNewBook = false`):** pass `imageFilePaths = null`. Image bytes are not re-read — VLM output is loaded from the DB.
 
 ### Book.pagesDir (DB)
 
 For PDF: unchanged (single path string).
-For images: JSON-encoded list of image paths, e.g. `'["path1.jpg","path2.jpg"]'`. This is metadata only — not read back by the processing pipeline.
+For images: JSON-encoded list of image paths, e.g. `'["path1.jpg","path2.jpg"]'`. Metadata only — not read back by the processing pipeline.
 
 ### Book ID
 
-SHA-256 of all image bytes concatenated in selection order. This is deterministic and content-addressed, consistent with the existing PDF approach.
+SHA-256 of all image bytes concatenated in selection order. Computed in `UploadScreen._generate()`. If a `bookId` already exists in the DB (`insertBook` is an upsert-or-ignore by existing app convention), the pre-existing book row is left untouched and the new audio version is inserted. This behaviour is identical to the existing PDF path.
 
 ---
 
@@ -54,19 +60,46 @@ SHA-256 of all image bytes concatenated in selection order. This is deterministi
 
 One `FilePicker` call with `allowMultiple: true`, accepting `['pdf', 'jpg', 'jpeg', 'png']`.
 
-- If any picked file is `.pdf` → store as `_pdfPath`, clear `_imagePaths`
-- Otherwise → **append** picked files to `_imagePaths` (supports multi-batch picking), clear `_pdfPath`
+Post-pick logic:
+1. Collect all returned files.
+2. If **any** file ends in `.pdf`: take the **first** PDF only, store as `_pdfPath`, clear `_imagePaths`. Any other files in the pick are silently ignored.
+3. Otherwise: append all returned image paths to `_imagePaths`, clear `_pdfPath`.
+4. Deduplicate `_imagePaths` by absolute path after appending.
+5. If `_imagePaths.length > 50` after appending, trim to 50 and show a `SnackBar`: _"Maximum 50 images supported. Extra images were removed."_
 
 ### Upload area
 
-**Empty state:** existing tap zone — "Tap to select PDF or images"
+**Empty state:** `GestureDetector(onTap: _pickFile)` — "Tap to select PDF or images"
 
-**PDF selected:** existing display — shows filename in the fixed-height box
+**PDF selected:** existing `GestureDetector` display — shows filename in the fixed-height box
 
-**Images selected:** the fixed-height box is replaced by a `ReorderableListView`:
-- Each row: page-number badge | small thumbnail | truncated filename | drag handle (`Icons.drag_handle`)
-- Below the list: "Add more images" `TextButton` that re-invokes the picker and appends
-- Individual images can be removed via a delete icon or swipe (optional, keep simple)
+**Images selected:** the `GestureDetector` is **removed**. Replace the fixed-height container with:
+
+```
+ConstrainedBox(
+  constraints: BoxConstraints(maxHeight: 300),
+  child: ReorderableListView(...)
+)
+```
+
+Each row: page-number badge | small thumbnail (50×50, decoded with `Image.file`) | truncated filename | delete icon | drag handle (`Icons.drag_handle`)
+
+Below the `ConstrainedBox`: an "Add more images" `TextButton` that invokes `_pickFile` and appends (deduplicating, cap enforced). The outer `GestureDetector` is absent in this state, so there is no tap-handler conflict.
+
+When all images are removed (list empties), revert to the empty-state `GestureDetector`.
+
+### Cover extraction (UploadScreen)
+
+For multi-image mode, cover extraction is done in `UploadScreen._generate()` before navigation:
+
+```dart
+final coverBytes = await File(_imagePaths.first).readAsBytes();
+final coverFile = File('${dir.path}/${bookId}_cover.jpg');
+await coverFile.writeAsBytes(coverBytes);
+await AppDatabase.instance.updateBookCoverPath(bookId, coverFile.path);
+```
+
+`LoadingScreen` does **not** perform cover extraction for multi-image mode.
 
 ### Generate button enablement
 
@@ -91,20 +124,13 @@ if (p.imageFilePaths != null) {
 } else if (p.filePath.toLowerCase().endsWith('.pdf')) {
   imageBytes = await PdfService.pdfToJpegBytes(p.filePath);
 } else {
-  imageBytes = [await File(p.filePath).readAsBytes()]; // fallback
+  imageBytes = [await File(p.filePath).readAsBytes()]; // fallback: single image
 }
 ```
 
 ### Cover extraction
 
-For multi-image mode: copy first image bytes directly to the cover file (no PDF conversion).
-
-```dart
-if (p.imageFilePaths != null && p.imageFilePaths!.isNotEmpty) {
-  final coverBytes = await File(p.imageFilePaths!.first).readAsBytes();
-  await coverFile.writeAsBytes(coverBytes);
-}
-```
+Not performed in `LoadingScreen` for multi-image mode (already done in `UploadScreen`). Existing PDF cover extraction in `LoadingScreen` is unchanged.
 
 ### ApiService.analyzePages()
 
@@ -114,9 +140,13 @@ No changes — already accepts `List<Uint8List>`.
 
 ## Error Handling
 
-- Empty image list: Generate button is disabled, so this cannot be reached.
-- File read failure for one image: propagates as an unhandled exception → `_hasError = true` → user sees "Try Again" screen (existing behaviour).
-- Mixed PDF + image selection: prevented by picker logic (PDF clears images, images clear PDF).
+- **Empty image list:** Generate button is disabled — cannot be reached.
+- **> 50 images:** Trimmed to 50 with a SnackBar in `UploadScreen` before `_generate()` is reachable.
+- **File read failure:** Propagates as an unhandled exception → `_hasError = true` → "Try Again" screen. Retry re-reads from `p.imageFilePaths`; if files are no longer accessible the retry fails again — known limitation, out of scope.
+- **Mixed PDF + image pick:** First PDF wins; image files in the same pick are silently ignored.
+- **Multiple PDFs in one pick:** First PDF is used; others are ignored.
+- **Duplicate images on append:** Deduplicated by absolute path; silent skip.
+- **Book ID collision:** Existing `insertBook` upsert-or-ignore behaviour applies; audio version is still inserted. Same as PDF path.
 
 ---
 
@@ -125,4 +155,4 @@ No changes — already accepts `List<Uint8List>`.
 - Drag-to-reorder persistence across app restarts
 - Image cropping or rotation
 - Progress per-image during VLM analysis
-- Resume flow for multi-image books (resume re-uses cached VLM output; no image re-reading needed)
+- Stale file URI handling on retry after picker session expiry
