@@ -7,18 +7,42 @@ _VLM_MODELS = {
     "gpt4o": "gpt-4o",
 }
 
-_SYSTEM_PROMPT = (
+_SYSTEM_PROMPT_TEXT_HEAVY = (
     "You are a children's book reader. Analyse every page image provided and "
-    "return ONLY a JSON object with this exact structure, no markdown fences:\n"
-    '{"pages": [{"page": <1-based int>, "text": "<all text and story from that page>"}]}'
+    "extract ONLY the text visible on each page, ignoring background illustrations. "
+    "Return ONLY a JSON object with this exact structure, no markdown fences:\n"
+    '{"pages": [{"page": <1-based int>, "text": "<all visible text from that page>"}]}'
 )
 
+_SYSTEM_PROMPT_PICTURE_BOOK = (
+    "You are a children's picture book narrator. For each page image provided, "
+    "analyse the illustrations, character emotions, and scene composition. "
+    "Also extract any visible text on the page as a supporting detail. "
+    "Combine both to generate a cohesive, imaginative narrative for that page. "
+    "Return ONLY a JSON object with this exact structure, no markdown fences:\n"
+    '{"pages": [{"page": <1-based int>, "text": "<generated narrative for that page>"}]}'
+)
 
-def analyze_pages(image_bytes_list: list[bytes], vlm_provider: str) -> list[dict]:
+_SYSTEM_PROMPTS = {
+    "text_heavy": _SYSTEM_PROMPT_TEXT_HEAVY,
+    "picture_book": _SYSTEM_PROMPT_PICTURE_BOOK,
+}
+
+
+def analyze_pages(
+    image_bytes_list: list[bytes],
+    vlm_provider: str,
+    processing_mode: str,
+    openai_api_key: str,
+    google_api_key: str,
+) -> list[dict]:
     """Call VLM with page images; return list of {page, text} dicts."""
     model = _VLM_MODELS.get(vlm_provider)
     if model is None:
         raise ValueError(f"Unknown vlm_provider: {vlm_provider!r}")
+
+    system_prompt = _SYSTEM_PROMPTS.get(processing_mode, _SYSTEM_PROMPT_TEXT_HEAVY)
+    api_key = openai_api_key if vlm_provider == "gpt4o" else google_api_key
 
     image_content = []
     for img_bytes in image_bytes_list:
@@ -32,9 +56,10 @@ def analyze_pages(image_bytes_list: list[bytes], vlm_provider: str) -> list[dict
     response = litellm.completion(
         model=model,
         messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": image_content},
         ],
+        api_key=api_key,
     )
     raw = response.choices[0].message.content
     try:
