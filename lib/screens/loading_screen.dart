@@ -92,8 +92,12 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
 
   Future<void> _runLivePipeline() async {
     final p = widget.params!;
-    final resolvedApi = await ref.read(apiServiceProvider.future);
-    final api = widget.apiService ?? resolvedApi;
+    final ApiService api;
+    if (widget.apiService != null) {
+      api = widget.apiService!;
+    } else {
+      api = await ref.read(apiServiceProvider.future);
+    }
 
     try {
       setState(() => _step = 0);
