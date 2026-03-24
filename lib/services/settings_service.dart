@@ -1,0 +1,39 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+class SettingsService {
+  static const _openAiKey = 'openai_api_key';
+  static const _googleKey = 'google_api_key';
+
+  final FlutterSecureStorage _storage;
+
+  SettingsService({FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage();
+
+  Future<bool> hasKeys() async {
+    final openAi = await _storage.read(key: _openAiKey);
+    final google = await _storage.read(key: _googleKey);
+    return openAi != null &&
+        openAi.isNotEmpty &&
+        google != null &&
+        google.isNotEmpty;
+  }
+
+  Future<({String openAi, String google})> getKeys() async {
+    final openAi = await _storage.read(key: _openAiKey) ?? '';
+    final google = await _storage.read(key: _googleKey) ?? '';
+    return (openAi: openAi, google: google);
+  }
+
+  Future<void> saveKeys({
+    required String openAiKey,
+    required String googleKey,
+  }) async {
+    await _storage.write(key: _openAiKey, value: openAiKey);
+    await _storage.write(key: _googleKey, value: googleKey);
+  }
+
+  Future<void> clearKeys() async {
+    await _storage.delete(key: _openAiKey);
+    await _storage.delete(key: _googleKey);
+  }
+}
