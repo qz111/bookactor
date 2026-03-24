@@ -61,14 +61,15 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             .where((f) => f.path != null)
             .map((f) => f.path!)
             .toList();
-        // Append, deduplicating by absolute path.
-        final seen = Set<String>.from(_imagePaths);
+        // Build merged list with deduplication, then assign once.
+        final merged = List<String>.from(_imagePaths);
+        final seen = Set<String>.from(merged);
         for (final p in newPaths) {
-          if (seen.add(p)) _imagePaths.add(p);
+          if (seen.add(p)) merged.add(p);
         }
-        // Enforce 50-image cap.
-        if (_imagePaths.length > 50) {
-          _imagePaths = _imagePaths.sublist(0, 50);
+        _imagePaths = merged.length > 50 ? merged.sublist(0, 50) : merged;
+        // Show cap SnackBar if needed.
+        if (merged.length > 50) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
