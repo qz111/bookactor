@@ -30,5 +30,5 @@ def test_tts_requires_lines_field(client):
     assert response.status_code == 422
 
 def test_tts_requires_index_text_voice(client):
-    response = client.post("/tts", json={"lines": [{"index": 0}], "openai_api_key": ""})
+    response = client.post("/tts", json={"lines": [{"index": 0}], "openai_api_key": "sk-test"})
     assert response.status_code == 422

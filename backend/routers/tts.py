@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from backend.services.tts_service import generate_audio
 
 router = APIRouter()
@@ -13,7 +13,7 @@ class TtsLine(BaseModel):
 
 class TtsRequest(BaseModel):
     lines: list[TtsLine]
-    openai_api_key: str
+    openai_api_key: str = Field(min_length=1)
 
 
 @router.post("/tts")
