@@ -110,9 +110,10 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
       List<Map<String, dynamic>> vlmOutput;
       if (p.isNewBook) {
         final List<Uint8List> imageBytes;
-        if (p.imageFilePaths != null) {
+        final imagePaths = p.imageFilePaths;
+        if (imagePaths != null && imagePaths.isNotEmpty) {
           imageBytes = await Future.wait(
-            p.imageFilePaths!.map((path) => File(path).readAsBytes()),
+            imagePaths.map((path) => File(path).readAsBytes()),
           );
         } else if (p.filePath.toLowerCase().endsWith('.pdf')) {
           imageBytes = await PdfService.pdfToJpegBytes(p.filePath);

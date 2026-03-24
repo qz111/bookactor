@@ -15,6 +15,7 @@ import 'package:bookactor/services/api_service.dart';
 
 class _RecordingApiService extends ApiService {
   final List<String> calls = [];
+  final List<List<Uint8List>> analyzeCalls = [];
   _RecordingApiService() : super(baseUrl: 'http://fake', openAiKey: 'test', googleKey: 'test');
 
   @override
@@ -24,6 +25,7 @@ class _RecordingApiService extends ApiService {
     required ProcessingMode processingMode,
   }) async {
     calls.add('analyze');
+    analyzeCalls.add(imageBytesList);
     return [{'page': 1, 'text': 'test'}];
   }
 
@@ -189,5 +191,6 @@ void main() {
     await tester.pump();
 
     expect(fakeApi.calls, equals(['analyze', 'script', 'tts']));
+    expect(fakeApi.analyzeCalls.single.length, equals(2));
   });
 }
