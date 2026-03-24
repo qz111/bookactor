@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,7 +21,16 @@ import '../screens/loading_screen.dart';
 import '../services/pdf_service.dart';
 
 class UploadScreen extends ConsumerStatefulWidget {
-  const UploadScreen({super.key});
+  const UploadScreen({super.key}) : initialImagePaths = const [];
+
+  /// Test-only constructor that pre-seeds image paths.
+  @visibleForTesting
+  const UploadScreen.withImages({
+    super.key,
+    required this.initialImagePaths,
+  });
+
+  final List<String> initialImagePaths;
 
   @override
   ConsumerState<UploadScreen> createState() => _UploadScreenState();
@@ -30,6 +40,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   String? _pdfPath;
   List<String> _imagePaths = [];
   bool _isGenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialImagePaths.isNotEmpty) {
+      _imagePaths = List<String>.from(widget.initialImagePaths);
+    }
+  }
   String _language = 'en';
   String _vlmProvider = 'gemini';
   String _llmProvider = 'gpt4o';
@@ -286,6 +304,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       ),
     );
   }
+
   Widget _buildUploadArea() {
     // ── Multi-image state ────────────────────────────────────────────────
     if (_imagePaths.isNotEmpty) {
@@ -482,7 +501,10 @@ class _ImageRow extends StatelessWidget {
             onPressed: onDelete,
             tooltip: 'Remove',
           ),
-          const Icon(Icons.drag_handle),
+          ReorderableDragStartListener(
+            index: index,
+            child: const Icon(Icons.drag_handle),
+          ),
         ],
       ),
     );
