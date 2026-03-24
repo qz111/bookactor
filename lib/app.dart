@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'providers/settings_provider.dart';
 import 'screens/library_screen.dart';
 import 'screens/book_detail_screen.dart';
 import 'screens/upload_screen.dart';
 import 'screens/loading_screen.dart';
 import 'screens/player_screen.dart';
+import 'screens/settings_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final initialLocation = ref.watch(initialLocationProvider);
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: initialLocation,
     routes: [
       GoRoute(path: '/', builder: (_, __) => const LibraryScreen()),
       GoRoute(
@@ -40,6 +43,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/player/:versionId',
         builder: (_, state) =>
             PlayerScreen(versionId: state.pathParameters['versionId']!),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (_, __) => const SettingsScreen(),
       ),
     ],
   );

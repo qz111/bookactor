@@ -16,7 +16,16 @@ class LibraryScreen extends ConsumerWidget {
     final generatingAsync = ref.watch(generatingVersionsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Books')),
+      appBar: AppBar(
+        title: const Text('My Books'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => context.push('/settings'),
+            tooltip: 'API Keys',
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/upload'),
         icon: const Icon(Icons.add),
