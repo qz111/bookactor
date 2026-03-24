@@ -226,31 +226,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          GestureDetector(
-            onTap: _pickFile,
-            child: Container(
-              height: 140,
-              decoration: BoxDecoration(
-                border: Border.all(
-                    color: Theme.of(context).colorScheme.primary, width: 2),
-                borderRadius: BorderRadius.circular(12),
-                color: Theme.of(context)
-                    .colorScheme
-                    .primaryContainer
-                    .withValues(alpha: 0.3),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.upload_file, size: 40),
-                    const SizedBox(height: 8),
-                    Text(_pdfPath != null ? path_pkg.basename(_pdfPath!) : 'Tap to select PDF or images'),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          _buildUploadArea(),
           const SizedBox(height: 24),
           DropdownButtonFormField<String>(
             value: _language,
@@ -310,6 +286,75 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       ),
     );
   }
+  Widget _buildUploadArea() {
+    // ── Multi-image state ────────────────────────────────────────────────
+    if (_imagePaths.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: ReorderableListView(
+              shrinkWrap: true,
+              onReorder: (oldIndex, newIndex) {
+                setState(() {
+                  if (newIndex > oldIndex) newIndex--;
+                  final item = _imagePaths.removeAt(oldIndex);
+                  _imagePaths.insert(newIndex, item);
+                });
+              },
+              children: [
+                for (int i = 0; i < _imagePaths.length; i++)
+                  _ImageRow(
+                    key: ValueKey(_imagePaths[i]),
+                    index: i,
+                    path: _imagePaths[i],
+                    onDelete: () =>
+                        setState(() => _imagePaths.removeAt(i)),
+                  ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _pickFile,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: const Text('Add more images'),
+          ),
+        ],
+      );
+    }
+
+    // ── PDF selected / empty state ───────────────────────────────────────
+    return GestureDetector(
+      onTap: _pickFile,
+      child: Container(
+        height: 140,
+        decoration: BoxDecoration(
+          border: Border.all(
+              color: Theme.of(context).colorScheme.primary, width: 2),
+          borderRadius: BorderRadius.circular(12),
+          color: Theme.of(context)
+              .colorScheme
+              .primaryContainer
+              .withValues(alpha: 0.3),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.upload_file, size: 40),
+              const SizedBox(height: 8),
+              Text(
+                _pdfPath != null
+                    ? path_pkg.basename(_pdfPath!)
+                    : 'Tap to select PDF or images',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ModeCard extends StatelessWidget {
@@ -364,6 +409,81 @@ class _ModeCard extends StatelessWidget {
                     ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ImageRow extends StatelessWidget {
+  final int index;
+  final String path;
+  final VoidCallback onDelete;
+
+  const _ImageRow({
+    required super.key,
+    required this.index,
+    required this.path,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Page number badge
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${index + 1}',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Thumbnail
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Image.file(
+              File(path),
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 50,
+                height: 50,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: const Icon(Icons.broken_image, size: 24),
+              ),
+            ),
+          ),
+        ],
+      ),
+      title: Text(
+        path_pkg.basename(path),
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20),
+            onPressed: onDelete,
+            tooltip: 'Remove',
+          ),
+          const Icon(Icons.drag_handle),
+        ],
       ),
     );
   }
