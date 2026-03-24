@@ -136,4 +136,58 @@ void main() {
 
     expect(fakeApi.calls, equals(['analyze', 'script', 'tts']));
   });
+
+  testWidgets('LoadingScreen uses imageFilePaths when provided',
+      (tester) async {
+    // Create two real temp image files (1-byte PNG-like content is fine —
+    // the mock ApiService ignores the actual bytes)
+    final tempDir = Directory.systemTemp.createTempSync('bookactor_multi_');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final img1 = File('${tempDir.path}/p1.png')..writeAsBytesSync([1, 2, 3]);
+    final img2 = File('${tempDir.path}/p2.png')..writeAsBytesSync([4, 5, 6]);
+
+    final fakeApi = _RecordingApiService();
+    final tempAudioDir = Directory.systemTemp.createTempSync('bookactor_audio_');
+    addTearDown(() => tempAudioDir.deleteSync(recursive: true));
+
+    final params = LoadingParams(
+      bookId: 'test_book_live',
+      versionId: 'test_book_live_en',
+      filePath: img1.path,
+      imageFilePaths: [img1.path, img2.path],
+      language: 'en',
+      vlmProvider: 'gemini',
+      llmProvider: 'gpt4o',
+      processingMode: ProcessingMode.textHeavy,
+      isNewBook: true,
+      lastGeneratedLine: -1,
+      audioDirOverride: tempAudioDir.path,
+    );
+
+    final router = GoRouter(
+      initialLocation: '/loading',
+      routes: [
+        GoRoute(
+          path: '/loading',
+          builder: (context, state) => LoadingScreen(
+            params: params,
+            apiService: fakeApi,
+          ),
+        ),
+        GoRoute(
+            path: '/player/:versionId',
+            builder: (_, __) => const Scaffold(body: Text('player'))),
+      ],
+    );
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ProviderScope(
+        child: MaterialApp.router(routerConfig: router),
+      ));
+      await Future<void>.delayed(const Duration(seconds: 5));
+    });
+    await tester.pump();
+
+    expect(fakeApi.calls, equals(['analyze', 'script', 'tts']));
+  });
 }

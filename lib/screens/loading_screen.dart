@@ -26,6 +26,9 @@ class LoadingParams {
   final int lastGeneratedLine;
   /// Optional override for the audio output directory (useful in tests).
   final String? audioDirOverride;
+  /// Optional list of image paths for multi-image mode.
+  /// When non-null, these files are read in order instead of [filePath].
+  final List<String>? imageFilePaths;
 
   const LoadingParams({
     required this.bookId,
@@ -38,6 +41,7 @@ class LoadingParams {
     required this.isNewBook,
     required this.lastGeneratedLine,
     this.audioDirOverride,
+    this.imageFilePaths,
   });
 }
 
@@ -106,7 +110,11 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
       List<Map<String, dynamic>> vlmOutput;
       if (p.isNewBook) {
         final List<Uint8List> imageBytes;
-        if (p.filePath.toLowerCase().endsWith('.pdf')) {
+        if (p.imageFilePaths != null) {
+          imageBytes = await Future.wait(
+            p.imageFilePaths!.map((path) => File(path).readAsBytes()),
+          );
+        } else if (p.filePath.toLowerCase().endsWith('.pdf')) {
           imageBytes = await PdfService.pdfToJpegBytes(p.filePath);
         } else {
           imageBytes = [await File(p.filePath).readAsBytes()];
