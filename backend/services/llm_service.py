@@ -6,6 +6,11 @@ _LLM_MODELS = {
     "gpt4o": "gpt-4o",
 }
 
+_LLM_KEY_SOURCE = {
+    "gpt4o": "openai",
+    "gemini": "google",
+}
+
 _SYSTEM_PROMPT = (
     "You are a children's audiobook script writer. Given the extracted story text from a "
     "picture book, output ONLY a JSON object (no markdown fences) with this exact structure:\n"
@@ -22,11 +27,20 @@ _STRICT_ADDENDUM = (
 )
 
 
-def generate_script(vlm_output: list[dict], language: str, llm_provider: str) -> dict:
+def generate_script(
+    vlm_output: list[dict],
+    language: str,
+    llm_provider: str,
+    openai_api_key: str,
+    google_api_key: str,
+) -> dict:
     """Call LLM to generate a structured script; retry once on malformed JSON."""
     model = _LLM_MODELS.get(llm_provider)
     if model is None:
         raise ValueError(f"Unknown llm_provider: {llm_provider!r}")
+
+    key_source = _LLM_KEY_SOURCE.get(llm_provider, "google")
+    api_key = openai_api_key if key_source == "openai" else google_api_key
 
     user_content = (
         f"Language: {language}\n\n"
@@ -41,11 +55,11 @@ def generate_script(vlm_output: list[dict], language: str, llm_provider: str) ->
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_content},
             ],
+            api_key=api_key,
         )
         raw = response.choices[0].message.content
         try:
             data = json.loads(raw)
-            # Ensure all lines start as pending
             for line in data.get("lines", []):
                 line["status"] = "pending"
             return data
@@ -53,4 +67,4 @@ def generate_script(vlm_output: list[dict], language: str, llm_provider: str) ->
             if attempt == 1:
                 raise ValueError(f"LLM returned invalid JSON: {raw!r}") from exc
 
-    raise ValueError("LLM returned invalid JSON after 2 attempts")  # unreachable
+    raise ValueError("LLM returned invalid JSON after 2 attempts")
