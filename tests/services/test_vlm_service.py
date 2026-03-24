@@ -69,7 +69,7 @@ def test_analyze_text_heavy_mode_uses_ocr_prompt(mock_completion):
     )
     call_kwargs = mock_completion.call_args.kwargs
     system_content = call_kwargs["messages"][0]["content"]
-    assert "text" in system_content.lower()
+    assert "ignoring background illustrations" in system_content.lower() or "extract only the text" in system_content.lower()
 
 @patch("litellm.completion")
 def test_analyze_encodes_images_as_base64(mock_completion):

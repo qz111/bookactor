@@ -28,6 +28,16 @@ _SYSTEM_PROMPTS = {
     "picture_book": _SYSTEM_PROMPT_PICTURE_BOOK,
 }
 
+_USER_PROMPTS = {
+    "text_heavy": "Extract the story text from every page.",
+    "picture_book": "Describe the illustrations and story for every page.",
+}
+
+_VLM_KEY_SOURCE = {
+    "gpt4o": "openai",
+    "gemini": "google",
+}
+
 
 def analyze_pages(
     image_bytes_list: list[bytes],
@@ -42,7 +52,8 @@ def analyze_pages(
         raise ValueError(f"Unknown vlm_provider: {vlm_provider!r}")
 
     system_prompt = _SYSTEM_PROMPTS.get(processing_mode, _SYSTEM_PROMPT_TEXT_HEAVY)
-    api_key = openai_api_key if vlm_provider == "gpt4o" else google_api_key
+    key_source = _VLM_KEY_SOURCE.get(vlm_provider, "google")
+    api_key = openai_api_key if key_source == "openai" else google_api_key
 
     image_content = []
     for img_bytes in image_bytes_list:
@@ -51,7 +62,8 @@ def analyze_pages(
             "type": "image_url",
             "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
         })
-    image_content.append({"type": "text", "text": "Extract the story text from every page."})
+    user_text = _USER_PROMPTS.get(processing_mode, _USER_PROMPTS["text_heavy"])
+    image_content.append({"type": "text", "text": user_text})
 
     response = litellm.completion(
         model=model,
