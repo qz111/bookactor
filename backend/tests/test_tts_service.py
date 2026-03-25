@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import io
 import wave
 import pytest
@@ -106,7 +107,6 @@ class TestGenerateOneOpenai:
             )
 
         mock_silence.assert_called_once_with(fake_mp3, "mp3")
-        import base64
         assert result["audio_b64"] == base64.b64encode(fake_silenced).decode()
         assert result["status"] == "ready"
         assert result["index"] == 0
@@ -141,6 +141,6 @@ class TestGenerateOneGemini:
             )
 
         mock_silence.assert_called_once_with(fake_wav, "wav")
-        import base64
         assert result["audio_b64"] == base64.b64encode(fake_silenced).decode()
         assert result["status"] == "ready"
+        assert result["index"] == 1
