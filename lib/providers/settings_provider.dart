@@ -18,7 +18,7 @@ final apiKeysProvider =
 final apiServiceProvider = FutureProvider<ApiService>((ref) async {
   final keys = await ref.watch(apiKeysProvider.future);
   return ApiService(
-    baseUrl: 'http://localhost:8000',
+    baseUrl: 'http://localhost:8088',
     openAiKey: keys.openAi,
     googleKey: keys.google,
   );

@@ -1,6 +1,12 @@
 import base64
 import json
+import re
 import litellm
+
+
+def _strip_fences(text: str) -> str:
+    """Remove leading/trailing markdown code fences if present."""
+    return re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.DOTALL)
 
 _VLM_MODELS = {
     "gemini": "gemini/gemini-2.5-pro",
@@ -75,7 +81,7 @@ def analyze_pages(
     )
     raw = response.choices[0].message.content
     try:
-        data = json.loads(raw)
+        data = json.loads(_strip_fences(raw))
         return data["pages"]
     except (json.JSONDecodeError, KeyError) as exc:
         raise ValueError(f"VLM returned invalid JSON: {raw!r}") from exc

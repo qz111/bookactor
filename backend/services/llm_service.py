@@ -1,5 +1,11 @@
 import json
+import re
 import litellm
+
+
+def _strip_fences(text: str) -> str:
+    """Remove leading/trailing markdown code fences if present."""
+    return re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.DOTALL)
 
 _LLM_MODELS = {
     "gemini": "gemini/gemini-2.5-pro",
@@ -59,7 +65,7 @@ def generate_script(
         )
         raw = response.choices[0].message.content
         try:
-            data = json.loads(raw)
+            data = json.loads(_strip_fences(raw))
             for line in data.get("lines", []):
                 line["status"] = "pending"
             return data
