@@ -3,7 +3,7 @@ import json
 import litellm
 
 _VLM_MODELS = {
-    "gemini": "gemini/gemini-1.5-pro-latest",
+    "gemini": "gemini/gemini-2.5-pro",
     "gpt4o": "gpt-4o",
 }
 

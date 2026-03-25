@@ -65,7 +65,7 @@ async def _generate_one_gemini(client, line: dict) -> dict:
 
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model="gemini-2.5-pro-preview-tts",
+            model="gemini-2.5-pro-tts",
             contents=line["text"],
             config=types.GenerateContentConfig(
                 response_modalities=["AUDIO"],
