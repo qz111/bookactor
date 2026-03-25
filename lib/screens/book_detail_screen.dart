@@ -83,6 +83,10 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                         if (success && mounted) {
                           ref.invalidate(audioVersionsProvider(widget.bookId));
                           Navigator.pop(dialogContext);
+                        } else if (!success && mounted) {
+                          ScaffoldMessenger.of(screenContext).showSnackBar(
+                            const SnackBar(content: Text('Could not delete audio version.')),
+                          );
                         }
                       },
                 child: deleting
