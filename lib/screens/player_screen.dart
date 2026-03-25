@@ -163,6 +163,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               tooltip: widget.isNewBook ? 'Back to Generate' : 'Home',
               onPressed: () {
                 _audio.stop();
+                ref.invalidate(booksProvider);
                 context.go(widget.isNewBook ? '/upload' : '/');
               },
             ),
@@ -173,6 +174,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       tooltip: 'Home',
                       onPressed: () {
                         _audio.stop();
+                        ref.invalidate(booksProvider);
                         context.go('/');
                       },
                     ),
