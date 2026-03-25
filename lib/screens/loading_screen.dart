@@ -21,6 +21,7 @@ class LoadingParams {
   final String language;
   final String vlmProvider;
   final String llmProvider;
+  final String ttsProvider;
   final ProcessingMode processingMode;
   final bool isNewBook;
   final int lastGeneratedLine;
@@ -37,6 +38,7 @@ class LoadingParams {
     required this.language,
     required this.vlmProvider,
     required this.llmProvider,
+    required this.ttsProvider,
     required this.processingMode,
     required this.isNewBook,
     required this.lastGeneratedLine,
@@ -176,9 +178,11 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
               (l['index'] as int) > p.lastGeneratedLine)
           .map((l) {
             final charName = l['character'] as String;
+            final defaultVoice =
+                p.ttsProvider == 'gemini' ? 'Aoede' : 'alloy';
             final voice = characters.firstWhere(
               (c) => c['name'] == charName,
-              orElse: () => {'voice': 'alloy'},
+              orElse: () => {'voice': defaultVoice},
             )['voice'] as String;
             return {
               'index': l['index'],
@@ -188,7 +192,10 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
           })
           .toList();
 
-      final audioResults = await api.generateAudio(lines: pendingLines);
+      final audioResults = await api.generateAudio(
+        lines: pendingLines,
+        ttsProvider: p.ttsProvider,
+      );
       final scriptLines = List<Map<String, dynamic>>.from(lines);
 
       for (final result in audioResults) {

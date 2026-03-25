@@ -71,13 +71,16 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> generateAudio({
     required List<Map<String, dynamic>> lines,
+    String ttsProvider = 'openai',
   }) async {
     final response = await client.post(
       Uri.parse('$baseUrl/tts'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode({
         'lines': lines,
+        'tts_provider': ttsProvider,
         'openai_api_key': openAiKey,
+        'google_api_key': googleKey,
       }),
     );
     _checkStatus(response);

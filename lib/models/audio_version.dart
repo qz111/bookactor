@@ -3,6 +3,7 @@ class AudioVersion {
   final String bookId;
   final String language;
   final String? llmProvider;
+  final String? ttsProvider;
   final String scriptJson;
   final String audioDir;
   final String status;
@@ -15,6 +16,7 @@ class AudioVersion {
     required this.bookId,
     required this.language,
     this.llmProvider,
+    this.ttsProvider,
     required this.scriptJson,
     required this.audioDir,
     required this.status,
@@ -31,6 +33,7 @@ class AudioVersion {
         'book_id': bookId,
         'language': language,
         'llm_provider': llmProvider,
+        'tts_provider': ttsProvider,
         'script_json': scriptJson,
         'audio_dir': audioDir,
         'status': status,
@@ -44,6 +47,7 @@ class AudioVersion {
         bookId: map['book_id'] as String,
         language: map['language'] as String,
         llmProvider: map['llm_provider'] as String?,
+        ttsProvider: map['tts_provider'] as String?,
         scriptJson: map['script_json'] as String,
         audioDir: map['audio_dir'] as String,
         status: map['status'] as String,
@@ -63,6 +67,7 @@ class AudioVersion {
         bookId: bookId,
         language: language,
         llmProvider: llmProvider,
+        ttsProvider: ttsProvider,
         scriptJson: scriptJson ?? this.scriptJson,
         audioDir: audioDir,
         status: status ?? this.status,

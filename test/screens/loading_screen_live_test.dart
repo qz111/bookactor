@@ -47,6 +47,7 @@ class _RecordingApiService extends ApiService {
   @override
   Future<List<Map<String, dynamic>>> generateAudio({
     required List<Map<String, dynamic>> lines,
+    String ttsProvider = 'openai',
   }) async {
     calls.add('tts');
     return [{'index': 0, 'status': 'ready', 'audio_b64': base64Encode([1, 2, 3])}];
@@ -104,6 +105,7 @@ void main() {
       language: 'en',
       vlmProvider: 'gemini',
       llmProvider: 'gpt4o',
+      ttsProvider: 'openai',
       processingMode: ProcessingMode.textHeavy,
       isNewBook: true,
       lastGeneratedLine: -1,
@@ -160,6 +162,7 @@ void main() {
       language: 'en',
       vlmProvider: 'gemini',
       llmProvider: 'gpt4o',
+      ttsProvider: 'openai',
       processingMode: ProcessingMode.textHeavy,
       isNewBook: true,
       lastGeneratedLine: -1,

@@ -42,6 +42,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   String _language = 'en';
   String _vlmProvider = 'gemini';
   String _llmProvider = 'gpt4o';
+  String _ttsProvider = 'openai';
   bool _isGenerating = false;
   ProcessingMode? _processingMode;
 
@@ -174,6 +175,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         bookId: bookId,
         language: _language,
         llmProvider: _llmProvider,
+        ttsProvider: _ttsProvider,
         scriptJson: '{}',
         audioDir: '',
         status: 'generating',
@@ -192,6 +194,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           language: _language,
           vlmProvider: _vlmProvider,
           llmProvider: _llmProvider,
+          ttsProvider: _ttsProvider,
           processingMode: _processingMode!,
           isNewBook: true,
           lastGeneratedLine: -1,
@@ -278,6 +281,18 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
               DropdownMenuItem(value: 'gemini', child: Text('Gemini')),
             ],
             onChanged: (v) => setState(() => _llmProvider = v!),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _ttsProvider,
+            decoration: const InputDecoration(
+                labelText: 'Text-to-Speech (TTS)',
+                border: OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: 'openai', child: Text('OpenAI TTS')),
+              DropdownMenuItem(value: 'gemini', child: Text('Gemini TTS')),
+            ],
+            onChanged: (v) => setState(() => _ttsProvider = v!),
           ),
           const SizedBox(height: 32),
           FilledButton.icon(
