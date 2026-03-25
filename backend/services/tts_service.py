@@ -86,7 +86,11 @@ async def _generate_one_gemini(client, line: dict) -> dict:
                 ),
             ),
         )
-        pcm_bytes = response.candidates[0].content.parts[0].inline_data.data
+        candidate = response.candidates[0]
+        if candidate.content is None:
+            finish = getattr(candidate, "finish_reason", "unknown")
+            raise ValueError(f"Gemini returned no content (finish_reason={finish})")
+        pcm_bytes = candidate.content.parts[0].inline_data.data
         wav_bytes = _pcm_to_wav(pcm_bytes)
         audio_b64 = base64.b64encode(_append_silence(wav_bytes, "wav")).decode()
         return {"index": line["index"], "status": "ready", "audio_b64": audio_b64}
