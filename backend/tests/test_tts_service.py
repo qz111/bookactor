@@ -1,3 +1,4 @@
+import asyncio
 import io
 import wave
 import pytest
@@ -77,3 +78,69 @@ class TestAppendSilence:
         assert call_args.args[0].getvalue() == fake_mp3
         MockAS.silent.assert_called_once_with(duration=600, frame_rate=24000)
         assert result == b"fake_mp3_with_silence"
+
+
+class TestGenerateOneOpenai:
+    """Smoke test that _generate_one_openai passes audio through _append_silence."""
+
+    def test_silence_appended_to_openai_result(self):
+        from backend.services import tts_service
+
+        # Fake MP3 bytes (pydub path is mocked)
+        fake_mp3 = b"fake_mp3"
+        fake_silenced = b"fake_mp3_silenced"
+
+        mock_response = MagicMock()
+        mock_response.content = fake_mp3
+
+        mock_client = MagicMock()
+
+        async def fake_create(**kwargs):
+            return mock_response
+
+        mock_client.audio.speech.create = fake_create
+
+        with patch.object(tts_service, "_append_silence", return_value=fake_silenced) as mock_silence:
+            result = asyncio.run(
+                tts_service._generate_one_openai(mock_client, {"index": 0, "text": "Hello", "voice": "alloy"})
+            )
+
+        mock_silence.assert_called_once_with(fake_mp3, "mp3")
+        import base64
+        assert result["audio_b64"] == base64.b64encode(fake_silenced).decode()
+        assert result["status"] == "ready"
+        assert result["index"] == 0
+
+
+class TestGenerateOneGemini:
+    """Smoke test that _generate_one_gemini passes WAV through _append_silence."""
+
+    def test_silence_appended_to_gemini_result(self):
+        from backend.services import tts_service
+
+        fake_wav = b"fake_wav"
+        fake_silenced = b"fake_wav_silenced"
+
+        # Mock the Gemini response structure
+        mock_part = MagicMock()
+        mock_part.inline_data.data = b"raw_pcm"
+        mock_content = MagicMock()
+        mock_content.parts = [mock_part]
+        mock_candidate = MagicMock()
+        mock_candidate.content = mock_content
+        mock_response = MagicMock()
+        mock_response.candidates = [mock_candidate]
+
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        with patch.object(tts_service, "_pcm_to_wav", return_value=fake_wav), \
+             patch.object(tts_service, "_append_silence", return_value=fake_silenced) as mock_silence:
+            result = asyncio.run(
+                tts_service._generate_one_gemini(mock_client, {"index": 1, "text": "Hi", "voice": "Aoede"})
+            )
+
+        mock_silence.assert_called_once_with(fake_wav, "wav")
+        import base64
+        assert result["audio_b64"] == base64.b64encode(fake_silenced).decode()
+        assert result["status"] == "ready"

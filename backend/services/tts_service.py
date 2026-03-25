@@ -53,7 +53,7 @@ async def _generate_one_openai(client: AsyncOpenAI, line: dict) -> dict:
             voice=line["voice"],
             response_format="mp3",
         )
-        audio_b64 = base64.b64encode(response.content).decode()
+        audio_b64 = base64.b64encode(_append_silence(response.content, "mp3")).decode()
         return {"index": line["index"], "status": "ready", "audio_b64": audio_b64}
     except Exception:
         return {"index": line["index"], "status": "error"}
@@ -80,7 +80,7 @@ async def _generate_one_gemini(client, line: dict) -> dict:
         )
         pcm_bytes = response.candidates[0].content.parts[0].inline_data.data
         wav_bytes = _pcm_to_wav(pcm_bytes)
-        audio_b64 = base64.b64encode(wav_bytes).decode()
+        audio_b64 = base64.b64encode(_append_silence(wav_bytes, "wav")).decode()
         return {"index": line["index"], "status": "ready", "audio_b64": audio_b64}
     except Exception:
         return {"index": line["index"], "status": "error"}
