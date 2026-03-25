@@ -8,6 +8,7 @@ class AudioControls extends StatelessWidget {
   final VoidCallback onPause;
   final VoidCallback onNext;
   final VoidCallback onPrev;
+  final VoidCallback onRestart;
 
   const AudioControls({
     super.key,
@@ -18,6 +19,7 @@ class AudioControls extends StatelessWidget {
     required this.onPause,
     required this.onNext,
     required this.onPrev,
+    required this.onRestart,
   });
 
   @override
@@ -32,6 +34,12 @@ class AudioControls extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            IconButton(
+                iconSize: 32,
+                onPressed: onRestart,
+                tooltip: 'Restart from beginning',
+                icon: const Icon(Icons.replay)),
+            const SizedBox(width: 4),
             IconButton(
                 iconSize: 36,
                 onPressed: onPrev,

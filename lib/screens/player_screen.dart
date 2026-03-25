@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../db/database.dart';
 import '../models/script.dart';
 import '../providers/books_provider.dart';
@@ -65,10 +66,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   void _onLineComplete() {
     if (!mounted) return;
-    // Auto-advance to next line
     final notifier = ref.read(playerProvider.notifier);
+    // Stop at the last line instead of repeating it
+    if (notifier.isAtLastLine) {
+      notifier.pause();
+      return;
+    }
     notifier.nextLine();
     _loadAndPlayCurrentLine();
+  }
+
+  Future<void> _restartFromBeginning() async {
+    await _audio.stop();
+    ref.read(playerProvider.notifier).goToLine(0);
+    await _loadAndPlayCurrentLine();
   }
 
   Future<void> _loadAndPlayCurrentLine() async {
@@ -143,7 +154,27 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             version?.language.toUpperCase() ?? 'MOCK';
 
         return Scaffold(
-          appBar: AppBar(title: Text(displayLanguage)),
+          appBar: AppBar(
+            title: Text(displayLanguage),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Back to Generate',
+              onPressed: () {
+                _audio.stop();
+                context.go('/upload');
+              },
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.home),
+                tooltip: 'Home',
+                onPressed: () {
+                  _audio.stop();
+                  context.go('/');
+                },
+              ),
+            ],
+          ),
           body: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -190,6 +221,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   },
                   onPrev: () =>
                       ref.read(playerProvider.notifier).prevLine(),
+                  onRestart: _restartFromBeginning,
                 ),
               ],
             ),

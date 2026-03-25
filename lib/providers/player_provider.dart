@@ -55,6 +55,22 @@ class PlayerNotifier extends Notifier<PlayerState> {
     }
   }
 
+  void goToLine(int line) {
+    if (state.script == null) return;
+    final readyCount =
+        state.script!.lines.where((l) => l.status == 'ready').length;
+    if (line >= 0 && line < readyCount) {
+      state = state.copyWith(currentLine: line, isPlaying: true);
+    }
+  }
+
+  bool get isAtLastLine {
+    if (state.script == null) return false;
+    final readyCount =
+        state.script!.lines.where((l) => l.status == 'ready').length;
+    return state.currentLine >= readyCount - 1;
+  }
+
   Script? get script => state.script;
 }
 
