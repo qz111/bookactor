@@ -1,6 +1,5 @@
 import io
 import wave
-import struct
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -74,6 +73,7 @@ class TestAppendSilence:
 
             result = _append_silence(fake_mp3, "mp3", duration_ms=600)
 
-        MockAS.from_file.assert_called_once()
+        call_args = MockAS.from_file.call_args
+        assert call_args.args[0].getvalue() == fake_mp3
         MockAS.silent.assert_called_once_with(duration=600, frame_rate=24000)
         assert result == b"fake_mp3_with_silence"
