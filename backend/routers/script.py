@@ -1,7 +1,9 @@
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from backend.services.llm_service import generate_script
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -26,4 +28,7 @@ def script(req: ScriptRequest):
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Error in /script")
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
     return {"script": result}

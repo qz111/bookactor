@@ -1,8 +1,10 @@
 import asyncio
+import logging
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from typing import Annotated
 from backend.services.vlm_service import analyze_pages
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -27,4 +29,7 @@ async def analyze(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Error in /analyze")
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
     return {"pages": pages}
