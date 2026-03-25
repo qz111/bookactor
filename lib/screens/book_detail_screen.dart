@@ -41,6 +41,65 @@ class BookDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
+  void _confirmDelete(BuildContext screenContext, AudioVersion version) {
+    showDialog(
+      context: screenContext,
+      builder: (dialogContext) {
+        bool deleting = false;
+        return StatefulBuilder(
+          builder: (_, setDialogState) => AlertDialog(
+            title: const Text('Delete audio version?'),
+            content: const Text(
+              'This will permanently delete all audio files for this language. This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: deleting ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: deleting
+                    ? null
+                    : () async {
+                        setDialogState(() => deleting = true);
+                        bool success = false;
+                        try {
+                          if (version.audioDir.isNotEmpty) {
+                            try {
+                              await Directory(version.audioDir)
+                                  .delete(recursive: true);
+                            } on FileSystemException {
+                              // Directory already gone — proceed to DB cleanup.
+                            }
+                          }
+                          await AppDatabase.instance
+                              .deleteAudioVersion(version.versionId);
+                          success = true;
+                        } finally {
+                          if (!success && mounted) {
+                            setDialogState(() => deleting = false);
+                          }
+                        }
+                        if (success && mounted) {
+                          ref.invalidate(audioVersionsProvider(widget.bookId));
+                          Navigator.pop(dialogContext);
+                        }
+                      },
+                child: deleting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookAsync = ref.watch(singleBookProvider(widget.bookId));
@@ -86,18 +145,23 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 error: (e, _) => Text('Error: $e'),
                 data: (versions) => Column(
                   children: [
-                    ...versions.map((v) => ListTile(
-                          leading: LanguageBadge(
-                              language: v.language, status: v.status),
-                          title: Text(widget._languageName(v.language)),
-                          subtitle: Text(v.status),
-                          trailing: v.status == 'ready'
-                              ? IconButton(
-                                  icon: const Icon(Icons.play_circle_filled),
-                                  onPressed: () =>
-                                      context.push('/player/${v.versionId}'),
-                                )
-                              : null,
+                    ...versions.map((v) => GestureDetector(
+                          onLongPress: v.status == 'generating'
+                              ? null
+                              : () => _confirmDelete(context, v),
+                          child: ListTile(
+                            leading: LanguageBadge(
+                                language: v.language, status: v.status),
+                            title: Text(widget._languageName(v.language)),
+                            subtitle: Text(v.status),
+                            trailing: v.status == 'ready'
+                                ? IconButton(
+                                    icon: const Icon(Icons.play_circle_filled),
+                                    onPressed: () =>
+                                        context.push('/player/${v.versionId}'),
+                                  )
+                                : null,
+                          ),
                         )),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
@@ -187,7 +251,6 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                   bookId: widget.book.bookId,
                   language: _language,
                   llmProvider: _llmProvider,
-                  ttsProvider: _ttsProvider,
                   scriptJson: '{}',
                   audioDir: '',
                   status: 'generating',
@@ -207,7 +270,6 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                     language: _language,
                     vlmProvider: widget.book.vlmProvider,
                     llmProvider: _llmProvider,
-                    ttsProvider: _ttsProvider,
                     // processingMode is not used on resume (isNewBook: false skips analyzePages).
                     // Required field; textHeavy satisfies the constructor.
                     processingMode: ProcessingMode.textHeavy,

@@ -145,4 +145,75 @@ void main() {
     expect(params.isNewBook, false);
     expect(params.lastGeneratedLine, -1);
   });
+
+  testWidgets('long-press on ready version shows delete dialog', (tester) async {
+    final version = AudioVersion(
+      versionId: 'detail_test_book_en',
+      bookId: 'detail_test_book',
+      language: 'en',
+      scriptJson: '{}',
+      audioDir: '',
+      status: 'ready',
+      lastGeneratedLine: 0,
+      lastPlayedLine: 0,
+      createdAt: 1711065600,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          singleBookProvider('detail_test_book').overrideWith((_) async => testBook),
+          audioVersionsProvider('detail_test_book').overrideWith(
+            (_) async => [version],
+          ),
+        ],
+        child: const MaterialApp(
+          home: BookDetailScreen(bookId: 'detail_test_book'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Long-press the English language tile
+    await tester.longPress(find.text('English'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete audio version?'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+  });
+
+  testWidgets('long-press on generating version does NOT show delete dialog', (tester) async {
+    final version = AudioVersion(
+      versionId: 'detail_test_book_zh',
+      bookId: 'detail_test_book',
+      language: 'zh',
+      scriptJson: '{}',
+      audioDir: '',
+      status: 'generating',
+      lastGeneratedLine: 0,
+      lastPlayedLine: 0,
+      createdAt: 1711065600,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          singleBookProvider('detail_test_book').overrideWith((_) async => testBook),
+          audioVersionsProvider('detail_test_book').overrideWith(
+            (_) async => [version],
+          ),
+        ],
+        child: const MaterialApp(
+          home: BookDetailScreen(bookId: 'detail_test_book'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Chinese (Simplified)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete audio version?'), findsNothing);
+  });
 }
