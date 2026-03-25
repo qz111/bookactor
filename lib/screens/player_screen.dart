@@ -13,11 +13,13 @@ import '../widgets/audio_controls.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String versionId;
+  final bool isNewBook;
   final AudioService? audioService; // injected for testing
 
   const PlayerScreen({
     super.key,
     required this.versionId,
+    this.isNewBook = false,
     this.audioService,
   });
 
@@ -158,22 +160,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             title: Text(displayLanguage),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
-              tooltip: 'Back to Generate',
+              tooltip: widget.isNewBook ? 'Back to Generate' : 'Home',
               onPressed: () {
                 _audio.stop();
-                context.go('/upload');
+                context.go(widget.isNewBook ? '/upload' : '/');
               },
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.home),
-                tooltip: 'Home',
-                onPressed: () {
-                  _audio.stop();
-                  context.go('/');
-                },
-              ),
-            ],
+            actions: widget.isNewBook
+                ? [
+                    IconButton(
+                      icon: const Icon(Icons.home),
+                      tooltip: 'Home',
+                      onPressed: () {
+                        _audio.stop();
+                        context.go('/');
+                      },
+                    ),
+                  ]
+                : null,
           ),
           body: Padding(
             padding: const EdgeInsets.all(16),

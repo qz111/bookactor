@@ -41,8 +41,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/player/:versionId',
-        builder: (_, state) =>
-            PlayerScreen(versionId: state.pathParameters['versionId']!),
+        builder: (_, state) => PlayerScreen(
+          versionId: state.pathParameters['versionId']!,
+          isNewBook: state.extra as bool? ?? false,
+        ),
       ),
       GoRoute(
         path: '/settings',

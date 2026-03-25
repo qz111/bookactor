@@ -93,7 +93,7 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
     }
     if (!mounted) return;
     // Phase 2: always navigates to mock English version
-    context.go('/player/mock_book_001_en');
+    context.go('/player/mock_book_001_en', extra: true);
   }
 
   Future<void> _runLivePipeline() async {
@@ -238,7 +238,7 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
         );
       }
       if (!mounted) return;
-      context.go('/player/${p.versionId}');
+      context.go('/player/${p.versionId}', extra: p.isNewBook);
     } on ApiException catch (_) {
       if (!mounted) return;
       setState(() => _hasError = true);

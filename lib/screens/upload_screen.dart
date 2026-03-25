@@ -214,7 +214,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         keysAsync.valueOrNull!.google.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Book')),
+      appBar: AppBar(
+        title: const Text('Add Book'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Home',
+          onPressed: () => context.go('/'),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
