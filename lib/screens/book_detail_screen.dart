@@ -274,6 +274,7 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                     language: _language,
                     vlmProvider: widget.book.vlmProvider,
                     llmProvider: _llmProvider,
+                    ttsProvider: _ttsProvider,
                     // processingMode is not used on resume (isNewBook: false skips analyzePages).
                     // Required field; textHeavy satisfies the constructor.
                     processingMode: ProcessingMode.textHeavy,
