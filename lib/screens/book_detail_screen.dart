@@ -11,14 +11,40 @@ import '../providers/books_provider.dart';
 import '../screens/loading_screen.dart';
 import '../widgets/language_badge.dart';
 
-class BookDetailScreen extends ConsumerWidget {
+class BookDetailScreen extends ConsumerStatefulWidget {
   final String bookId;
   const BookDetailScreen({super.key, required this.bookId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bookAsync = ref.watch(singleBookProvider(bookId));
-    final versionsAsync = ref.watch(audioVersionsProvider(bookId));
+  ConsumerState<BookDetailScreen> createState() => _BookDetailScreenState();
+
+  Widget _coverPlaceholder(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: const Center(child: Icon(Icons.menu_book, size: 72)),
+    );
+  }
+
+  String _languageName(String code) =>
+      supportedLanguages.firstWhere(
+        (l) => l['code'] == code,
+        orElse: () => {'code': code, 'name': code},
+      )['name']!;
+
+  void _showNewLanguageSheet(BuildContext context, Book book) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _NewLanguageSheet(book: book),
+    );
+  }
+}
+
+class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final bookAsync = ref.watch(singleBookProvider(widget.bookId));
+    final versionsAsync = ref.watch(audioVersionsProvider(widget.bookId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Book')),
@@ -43,9 +69,9 @@ class BookDetailScreen extends ConsumerWidget {
                           width: double.infinity,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) =>
-                              _coverPlaceholder(context),
+                              widget._coverPlaceholder(context),
                         )
-                      : _coverPlaceholder(context),
+                      : widget._coverPlaceholder(context),
                 ),
               ),
               const SizedBox(height: 16),
@@ -63,7 +89,7 @@ class BookDetailScreen extends ConsumerWidget {
                     ...versions.map((v) => ListTile(
                           leading: LanguageBadge(
                               language: v.language, status: v.status),
-                          title: Text(_languageName(v.language)),
+                          title: Text(widget._languageName(v.language)),
                           subtitle: Text(v.status),
                           trailing: v.status == 'ready'
                               ? IconButton(
@@ -76,7 +102,7 @@ class BookDetailScreen extends ConsumerWidget {
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
                       onPressed: () =>
-                          _showNewLanguageSheet(context, book),
+                          widget._showNewLanguageSheet(context, book),
                       icon: const Icon(Icons.add),
                       label: const Text('New Language'),
                     ),
@@ -87,27 +113,6 @@ class BookDetailScreen extends ConsumerWidget {
           );
         },
       ),
-    );
-  }
-
-  Widget _coverPlaceholder(BuildContext context) {
-    return Container(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      child: const Center(child: Icon(Icons.menu_book, size: 72)),
-    );
-  }
-
-  String _languageName(String code) =>
-      supportedLanguages.firstWhere(
-        (l) => l['code'] == code,
-        orElse: () => {'code': code, 'name': code},
-      )['name']!;
-
-  void _showNewLanguageSheet(BuildContext context, Book book) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _NewLanguageSheet(book: book),
     );
   }
 }
@@ -123,6 +128,7 @@ class _NewLanguageSheet extends StatefulWidget {
 class _NewLanguageSheetState extends State<_NewLanguageSheet> {
   String _language = 'zh';
   String _llmProvider = 'gpt4o';
+  String _ttsProvider = 'openai';
 
   @override
   Widget build(BuildContext context) {
@@ -157,18 +163,31 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
             ],
             onChanged: (v) => setState(() => _llmProvider = v!),
           ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _ttsProvider,
+            decoration: const InputDecoration(
+                labelText: 'Text-to-Speech (TTS)',
+                border: OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: 'openai', child: Text('OpenAI TTS')),
+              DropdownMenuItem(value: 'gemini', child: Text('Gemini TTS')),
+            ],
+            onChanged: (v) => setState(() => _ttsProvider = v!),
+          ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
               onPressed: () async {
                 final versionId =
-                    AudioVersion.makeVersionId(widget.book.bookId, _language);
+                    '${widget.book.bookId}_${_language}_$_ttsProvider';
                 await AppDatabase.instance.insertAudioVersion(AudioVersion(
                   versionId: versionId,
                   bookId: widget.book.bookId,
                   language: _language,
                   llmProvider: _llmProvider,
+                  ttsProvider: _ttsProvider,
                   scriptJson: '{}',
                   audioDir: '',
                   status: 'generating',
@@ -188,6 +207,7 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                     language: _language,
                     vlmProvider: widget.book.vlmProvider,
                     llmProvider: _llmProvider,
+                    ttsProvider: _ttsProvider,
                     // processingMode is not used on resume (isNewBook: false skips analyzePages).
                     // Required field; textHeavy satisfies the constructor.
                     processingMode: ProcessingMode.textHeavy,
