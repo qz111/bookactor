@@ -16,7 +16,12 @@ class AppDatabase {
     final path = _isTest
         ? inMemoryDatabasePath
         : join(await getDatabasesPath(), 'bookactor.db');
-    _db = await openDatabase(path, version: 1, onCreate: _createDb);
+    _db = await openDatabase(
+      path,
+      version: 2,
+      onCreate: _createDb,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<Database> get database async {
@@ -27,6 +32,13 @@ class AppDatabase {
   Future<void> close() async {
     await _db?.close();
     _db = null;
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+          'ALTER TABLE audio_versions ADD COLUMN tts_provider TEXT');
+    }
   }
 
   Future<void> _createDb(Database db, int version) async {
@@ -47,6 +59,7 @@ class AppDatabase {
         book_id TEXT NOT NULL,
         language TEXT NOT NULL,
         llm_provider TEXT,
+        tts_provider TEXT,
         script_json TEXT NOT NULL,
         audio_dir TEXT NOT NULL,
         status TEXT NOT NULL,
@@ -154,5 +167,10 @@ class AppDatabase {
     final rows = await db.query('audio_versions',
         where: 'status = ?', whereArgs: ['generating']);
     return rows.map(AudioVersion.fromMap).toList();
+  }
+
+  Future<void> deleteAudioVersion(String versionId) async {
+    final db = await database;
+    await db.delete('audio_versions', where: 'version_id = ?', whereArgs: [versionId]);
   }
 }

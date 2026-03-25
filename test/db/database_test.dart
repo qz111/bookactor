@@ -146,5 +146,26 @@ void main() {
       expect(generating.length, 1);
       expect(generating[0].language, 'zh');
     });
+
+    test('deleteAudioVersion removes the row', () async {
+      await db.insertAudioVersion(testVersion);
+
+      // Verify it exists
+      final before = await db.getAudioVersion('test123_en');
+      expect(before, isNotNull);
+
+      await db.deleteAudioVersion('test123_en');
+
+      final after = await db.getAudioVersion('test123_en');
+      expect(after, isNull);
+    });
+
+    test('deleteAudioVersion on missing id is a no-op', () async {
+      // Should not throw
+      await expectLater(
+        db.deleteAudioVersion('nonexistent_id'),
+        completes,
+      );
+    });
   });
 }
