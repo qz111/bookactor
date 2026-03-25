@@ -147,6 +147,7 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
         vlmOutput: vlmOutput,
         language: p.language,
         llmProvider: p.llmProvider,
+        ttsProvider: p.ttsProvider,
       );
       if (!mounted) return;
 

@@ -11,6 +11,7 @@ class ScriptRequest(BaseModel):
     vlm_output: list[dict]
     language: str
     llm_provider: str
+    tts_provider: str = "openai"
     openai_api_key: str
     google_api_key: str
 
@@ -23,6 +24,7 @@ def script(req: ScriptRequest):
             vlm_output=req.vlm_output,
             language=req.language,
             llm_provider=req.llm_provider,
+            tts_provider=req.tts_provider,
             openai_api_key=req.openai_api_key,
             google_api_key=req.google_api_key,
         )

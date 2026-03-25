@@ -17,15 +17,22 @@ _LLM_KEY_SOURCE = {
     "gemini": "google",
 }
 
-_SYSTEM_PROMPT = (
-    "You are a children's audiobook script writer. Given the extracted story text from a "
-    "picture book, output ONLY a JSON object (no markdown fences) with this exact structure:\n"
-    '{"characters": [{"name": "...", "voice": "<alloy|echo|fable|onyx|nova|shimmer>", '
-    '"traits": "..."}], "lines": [{"index": <0-based int>, "character": "...", '
-    '"text": "...", "page": <1-based int>, "status": "pending"}]}\n'
-    "Rules: Narrator is always present. Assign distinct voices to distinct characters. "
-    "All dialogue text must be in the language specified by the user."
-)
+_VOICES = {
+    "openai": "alloy|echo|fable|onyx|nova|shimmer",
+    "gemini": "aoede|charon|fenrir|kore|puck|zephyr|leda|orus",
+}
+
+def _system_prompt(tts_provider: str) -> str:
+    voices = _VOICES.get(tts_provider, _VOICES["openai"])
+    return (
+        "You are a children's audiobook script writer. Given the extracted story text from a "
+        "picture book, output ONLY a JSON object (no markdown fences) with this exact structure:\n"
+        f'{{"characters": [{{"name": "...", "voice": "<{voices}>", '
+        '"traits": "..."}], "lines": [{"index": <0-based int>, "character": "...", '
+        '"text": "...", "page": <1-based int>, "status": "pending"}]}\n'
+        "Rules: Narrator is always present. Assign distinct voices to distinct characters. "
+        "All dialogue text must be in the language specified by the user."
+    )
 
 _STRICT_ADDENDUM = (
     "\n\nIMPORTANT: Your previous response was not valid JSON. "
@@ -37,6 +44,7 @@ def generate_script(
     vlm_output: list[dict],
     language: str,
     llm_provider: str,
+    tts_provider: str,
     openai_api_key: str,
     google_api_key: str,
 ) -> dict:
@@ -53,8 +61,9 @@ def generate_script(
         f"Extracted story pages:\n{json.dumps(vlm_output, ensure_ascii=False)}"
     )
 
+    base_prompt = _system_prompt(tts_provider)
     for attempt in range(2):
-        system = _SYSTEM_PROMPT + (_STRICT_ADDENDUM if attempt == 1 else "")
+        system = base_prompt + (_STRICT_ADDENDUM if attempt == 1 else "")
         response = litellm.completion(
             model=model,
             messages=[

@@ -52,6 +52,7 @@ class ApiService {
     required List<Map<String, dynamic>> vlmOutput,
     required String language,
     required String llmProvider,
+    required String ttsProvider,
   }) async {
     final response = await client.post(
       Uri.parse('$baseUrl/script'),
@@ -60,6 +61,7 @@ class ApiService {
         'vlm_output': vlmOutput,
         'language': language,
         'llm_provider': llmProvider,
+        'tts_provider': ttsProvider,
         'openai_api_key': openAiKey,
         'google_api_key': googleKey,
       }),

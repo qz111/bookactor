@@ -14,6 +14,12 @@ OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 # Gemini TTS voices (subset of 30 available; covers a range of tones and genders)
 GEMINI_VOICES = ["Aoede", "Charon", "Fenrir", "Kore", "Puck", "Zephyr", "Leda", "Orus"]
 
+# Fallback map for scripts generated with OpenAI voices but played via Gemini TTS.
+_OPENAI_TO_GEMINI = {
+    "alloy": "aoede", "echo": "charon", "fable": "fenrir",
+    "onyx": "kore", "nova": "puck", "shimmer": "zephyr",
+}
+
 
 def _pcm_to_wav(pcm_bytes: bytes) -> bytes:
     """Wrap raw 24 kHz 16-bit mono PCM in a WAV container."""
@@ -56,6 +62,7 @@ async def _generate_one_openai(client: AsyncOpenAI, line: dict) -> dict:
         audio_b64 = base64.b64encode(_append_silence(response.content, "mp3")).decode()
         return {"index": line["index"], "status": "ready", "audio_b64": audio_b64}
     except Exception:
+        logger.exception("OpenAI TTS failed for line %d", line["index"])
         return {"index": line["index"], "status": "error"}
 
 
@@ -63,16 +70,17 @@ async def _generate_one_gemini(client, line: dict) -> dict:
     try:
         from google.genai import types
 
+        voice = _OPENAI_TO_GEMINI.get(line["voice"].lower(), line["voice"])
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model="gemini-2.5-pro-tts",
+            model="gemini-2.5-pro-preview-tts",
             contents=line["text"],
             config=types.GenerateContentConfig(
                 response_modalities=["AUDIO"],
                 speech_config=types.SpeechConfig(
                     voice_config=types.VoiceConfig(
                         prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=line["voice"]
+                            voice_name=voice
                         )
                     )
                 ),
@@ -83,6 +91,7 @@ async def _generate_one_gemini(client, line: dict) -> dict:
         audio_b64 = base64.b64encode(_append_silence(wav_bytes, "wav")).decode()
         return {"index": line["index"], "status": "ready", "audio_b64": audio_b64}
     except Exception:
+        logger.exception("Gemini TTS failed for line %d", line["index"])
         return {"index": line["index"], "status": "error"}
 
 
