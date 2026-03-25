@@ -6,3 +6,4 @@ google-genai
 python-multipart
 python-dotenv
 pydub
+audioop-lts
