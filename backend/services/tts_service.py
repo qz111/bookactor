@@ -3,6 +3,7 @@ import base64
 import io
 import logging
 import wave
+from google import genai
 from openai import AsyncOpenAI
 from pydub import AudioSegment
 
@@ -38,6 +39,19 @@ def _wav_duration_ms(wav_bytes: bytes) -> int:
         return int(w.getnframes() / w.getframerate() * 1000)
 
 
+def _parse_chunk_segments(text: str, voice_map: dict[str, str]) -> list[dict]:
+    """Parse 'Character: utterance\\n' text into [{text, voice}] segments."""
+    segments = []
+    fallback_voice = list(voice_map.values())[0] if voice_map else "alloy"
+    for line in text.strip().split("\n"):
+        if ": " not in line:
+            continue
+        name, utterance = line.split(": ", 1)
+        voice = voice_map.get(name.strip(), fallback_voice)
+        segments.append({"text": utterance.strip(), "voice": voice})
+    return segments
+
+
 def _append_silence(audio_bytes: bytes, fmt: str, duration_ms: int = 600) -> bytes:
     """Append silence to an audio chunk using pydub.
 
@@ -57,52 +71,37 @@ def _append_silence(audio_bytes: bytes, fmt: str, duration_ms: int = 600) -> byt
         return audio_bytes
 
 
-async def _generate_one_openai(client: AsyncOpenAI, line: dict) -> dict:
+async def _generate_chunk_openai(client: AsyncOpenAI, chunk: dict) -> dict:
+    """Generate audio for a chunk using OpenAI TTS; segments concatenated as WAV."""
     try:
-        response = await client.audio.speech.create(
-            model="tts-1",
-            input=line["text"],
-            voice=line["voice"],
-            response_format="mp3",
-        )
-        audio_b64 = base64.b64encode(_append_silence(response.content, "mp3")).decode()
-        return {"index": line["index"], "status": "ready", "audio_b64": audio_b64}
+        segments = _parse_chunk_segments(chunk["text"], chunk["voice_map"])
+        if not segments:
+            raise ValueError("No segments parsed from chunk text")
+
+        wav_parts = []
+        for seg in segments:
+            response = await client.audio.speech.create(
+                model="tts-1",
+                input=seg["text"],
+                voice=seg["voice"],
+                response_format="wav",
+            )
+            wav_parts.append(response.content)
+
+        combined = AudioSegment.from_wav(io.BytesIO(wav_parts[0]))
+        for part in wav_parts[1:]:
+            combined += AudioSegment.from_wav(io.BytesIO(part))
+
+        buf = io.BytesIO()
+        combined.export(buf, format="wav")
+        wav_bytes = buf.getvalue()
+        wav_with_silence = _append_silence(wav_bytes, "wav")
+        duration_ms = _wav_duration_ms(wav_with_silence)
+        audio_b64 = base64.b64encode(wav_with_silence).decode()
+        return {"index": chunk["index"], "status": "ready", "audio_b64": audio_b64, "duration_ms": duration_ms}
     except Exception:
-        logger.exception("OpenAI TTS failed for line %d", line["index"])
-        return {"index": line["index"], "status": "error"}
-
-
-async def _generate_one_gemini(client, line: dict) -> dict:
-    try:
-        from google.genai import types
-
-        voice = _OPENAI_TO_GEMINI.get(line["voice"].lower(), line["voice"])
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model="gemini-2.5-pro-preview-tts",
-            contents=line["text"],
-            config=types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=voice
-                        )
-                    )
-                ),
-            ),
-        )
-        candidate = response.candidates[0]
-        if candidate.content is None:
-            finish = getattr(candidate, "finish_reason", "unknown")
-            raise ValueError(f"Gemini returned no content (finish_reason={finish})")
-        pcm_bytes = candidate.content.parts[0].inline_data.data
-        wav_bytes = _pcm_to_wav(pcm_bytes)
-        audio_b64 = base64.b64encode(_append_silence(wav_bytes, "wav")).decode()
-        return {"index": line["index"], "status": "ready", "audio_b64": audio_b64}
-    except Exception:
-        logger.exception("Gemini TTS failed for line %d", line["index"])
-        return {"index": line["index"], "status": "error"}
+        logger.exception("OpenAI TTS failed for chunk %d", chunk["index"])
+        return {"index": chunk["index"], "status": "error", "duration_ms": 0}
 
 
 async def _generate_chunk_gemini(client, chunk: dict) -> dict:
@@ -181,19 +180,17 @@ async def _generate_gemini_throttled(client, chunks: list[dict], rpm: int = 10) 
 
 
 async def generate_audio(
-    lines: list[dict],
+    chunks: list[dict],
     tts_provider: str,
     openai_api_key: str,
     google_api_key: str,
 ) -> list[dict]:
-    """Generate TTS audio for all lines; returns results sorted by index."""
+    """Generate TTS audio for all chunks; returns results sorted by index."""
     if tts_provider == "gemini":
-        from google import genai
         client = genai.Client(api_key=google_api_key)
-        results = await _generate_gemini_throttled(client, lines)
+        results = await _generate_gemini_throttled(client, chunks)
     else:
         client = AsyncOpenAI(api_key=openai_api_key)
-        tasks = [_generate_one_openai(client, line) for line in lines]
+        tasks = [_generate_chunk_openai(client, chunk) for chunk in chunks]
         results = list(await asyncio.gather(*tasks))
-
     return sorted(results, key=lambda r: r["index"])

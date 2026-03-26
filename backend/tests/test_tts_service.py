@@ -81,71 +81,6 @@ class TestAppendSilence:
         assert result == b"fake_mp3_with_silence"
 
 
-class TestGenerateOneOpenai:
-    """Smoke test that _generate_one_openai passes audio through _append_silence."""
-
-    def test_silence_appended_to_openai_result(self):
-        from backend.services import tts_service
-
-        # Fake MP3 bytes (pydub path is mocked)
-        fake_mp3 = b"fake_mp3"
-        fake_silenced = b"fake_mp3_silenced"
-
-        mock_response = MagicMock()
-        mock_response.content = fake_mp3
-
-        mock_client = MagicMock()
-
-        async def fake_create(**kwargs):
-            return mock_response
-
-        mock_client.audio.speech.create = fake_create
-
-        with patch.object(tts_service, "_append_silence", return_value=fake_silenced) as mock_silence:
-            result = asyncio.run(
-                tts_service._generate_one_openai(mock_client, {"index": 0, "text": "Hello", "voice": "alloy"})
-            )
-
-        mock_silence.assert_called_once_with(fake_mp3, "mp3")
-        assert result["audio_b64"] == base64.b64encode(fake_silenced).decode()
-        assert result["status"] == "ready"
-        assert result["index"] == 0
-
-
-class TestGenerateOneGemini:
-    """Smoke test that _generate_one_gemini passes WAV through _append_silence."""
-
-    def test_silence_appended_to_gemini_result(self):
-        from backend.services import tts_service
-
-        fake_wav = b"fake_wav"
-        fake_silenced = b"fake_wav_silenced"
-
-        # Mock the Gemini response structure
-        mock_part = MagicMock()
-        mock_part.inline_data.data = b"raw_pcm"
-        mock_content = MagicMock()
-        mock_content.parts = [mock_part]
-        mock_candidate = MagicMock()
-        mock_candidate.content = mock_content
-        mock_response = MagicMock()
-        mock_response.candidates = [mock_candidate]
-
-        mock_client = MagicMock()
-        mock_client.models.generate_content.return_value = mock_response
-
-        with patch.object(tts_service, "_pcm_to_wav", return_value=fake_wav), \
-             patch.object(tts_service, "_append_silence", return_value=fake_silenced) as mock_silence:
-            result = asyncio.run(
-                tts_service._generate_one_gemini(mock_client, {"index": 1, "text": "Hi", "voice": "Aoede"})
-            )
-
-        mock_silence.assert_called_once_with(fake_wav, "wav")
-        assert result["audio_b64"] == base64.b64encode(fake_silenced).decode()
-        assert result["status"] == "ready"
-        assert result["index"] == 1
-
-
 class TestWavDurationMs:
     def test_returns_correct_duration(self):
         from backend.services.tts_service import _wav_duration_ms
@@ -252,3 +187,115 @@ class TestGenerateChunkGemini:
                 {"index": 0, "text": "Narrator: hi.", "voice_map": {"Narrator": "alloy"}}
             ))
         assert result["status"] == "ready"
+
+
+class TestParseChunkSegments:
+    def test_parses_two_speakers(self):
+        from backend.services.tts_service import _parse_chunk_segments
+        text = "Narrator: Hello there.\nBear: Hi!"
+        voice_map = {"Narrator": "alloy", "Bear": "echo"}
+        result = _parse_chunk_segments(text, voice_map)
+        assert len(result) == 2
+        assert result[0] == {"text": "Hello there.", "voice": "alloy"}
+        assert result[1] == {"text": "Hi!", "voice": "echo"}
+
+    def test_skips_lines_without_colon(self):
+        from backend.services.tts_service import _parse_chunk_segments
+        text = "Narrator: Hello.\nsome junk\nBear: Bye."
+        result = _parse_chunk_segments(text, {"Narrator": "alloy", "Bear": "echo"})
+        assert len(result) == 2
+
+    def test_unknown_speaker_falls_back_to_first_voice(self):
+        from backend.services.tts_service import _parse_chunk_segments
+        text = "Unknown: Hi."
+        result = _parse_chunk_segments(text, {"Narrator": "alloy"})
+        assert result[0]["voice"] == "alloy"
+
+
+class TestGenerateChunkOpenai:
+    def test_concatenates_segments_and_returns_duration(self):
+        from backend.services import tts_service
+
+        wav1 = _make_wav(duration_ms=1000)
+        wav2 = _make_wav(duration_ms=1000)
+
+        mock_client = MagicMock()
+        call_count = 0
+
+        async def fake_create(**kwargs):
+            nonlocal call_count
+            r = MagicMock()
+            r.content = wav1 if call_count == 0 else wav2
+            call_count += 1
+            return r
+
+        mock_client.audio.speech.create = fake_create
+
+        chunk = {
+            "index": 0,
+            "text": "Narrator: Hi.\nBear: Hello.",
+            "voice_map": {"Narrator": "alloy", "Bear": "echo"},
+        }
+        result = asyncio.run(tts_service._generate_chunk_openai(mock_client, chunk))
+
+        assert result["status"] == "ready"
+        assert result["index"] == 0
+        assert result["duration_ms"] > 1500  # two 1s segments + silence
+
+    def test_error_returns_zero_duration(self):
+        from backend.services import tts_service
+
+        mock_client = MagicMock()
+        mock_client.audio.speech.create.side_effect = RuntimeError("fail")
+
+        result = asyncio.run(tts_service._generate_chunk_openai(
+            mock_client,
+            {"index": 1, "text": "Narrator: Hi.", "voice_map": {"Narrator": "alloy"}}
+        ))
+        assert result["status"] == "error"
+        assert result["duration_ms"] == 0
+
+
+class TestGenerateAudio:
+    def test_routes_to_gemini(self):
+        from backend.services import tts_service
+        chunks = [{"index": 0, "text": "x", "voice_map": {"Narrator": "Aoede"}}]
+        fake = [{"index": 0, "status": "ready", "audio_b64": "a", "duration_ms": 1000}]
+
+        async def fake_throttled(client, chunks, rpm=10):
+            return fake
+
+        with patch("backend.services.tts_service._generate_gemini_throttled", side_effect=fake_throttled), \
+             patch("backend.services.tts_service.genai") as mock_genai:
+            mock_genai.Client.return_value = MagicMock()
+            import asyncio as _asyncio
+            result = _asyncio.run(tts_service.generate_audio(
+                chunks=chunks, tts_provider="gemini",
+                openai_api_key="", google_api_key="k"
+            ))
+        assert result[0]["duration_ms"] == 1000
+
+    def test_sorts_results_by_index(self):
+        from backend.services import tts_service
+        chunks = [
+            {"index": 1, "text": "b", "voice_map": {"Narrator": "Aoede"}},
+            {"index": 0, "text": "a", "voice_map": {"Narrator": "Aoede"}},
+        ]
+        unsorted = [
+            {"index": 1, "status": "ready", "audio_b64": "b", "duration_ms": 500},
+            {"index": 0, "status": "ready", "audio_b64": "a", "duration_ms": 600},
+        ]
+
+        async def fake_throttled(client, chunks, rpm=10):
+            return unsorted
+
+        with patch("backend.services.tts_service._generate_gemini_throttled", side_effect=fake_throttled), \
+             patch("backend.services.tts_service.genai") as mock_genai:
+            mock_genai.Client.return_value = MagicMock()
+            import asyncio as _asyncio
+            result = _asyncio.run(tts_service.generate_audio(
+                chunks=chunks, tts_provider="gemini",
+                openai_api_key="", google_api_key="k"
+            ))
+        assert result[0]["index"] == 0
+        assert result[1]["index"] == 1
