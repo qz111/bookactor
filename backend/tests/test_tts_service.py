@@ -212,9 +212,9 @@ class TestCollapseToTwoSpeakers:
         # Mother's line now attributed to Narrator
         assert new_text.count("Narrator:") == 2
 
-    def test_all_same_gender_forces_contrasting_voice(self):
-        from backend.services.tts_service import _collapse_to_two_speakers, _MALE_VOICES
-        # All female voices — contrast speaker must get a male voice
+    def test_all_same_gender_uses_different_same_gender_voice(self):
+        from backend.services.tts_service import _collapse_to_two_speakers
+        # All female voices — contrast speaker keeps their own (different female) voice
         text = "Narrator: A.\nAlice: B.\nBeth: C."
         voice_map = {"Narrator": "Aoede", "Alice": "Kore", "Beth": "Zephyr"}
         new_text, new_map = _collapse_to_two_speakers(text, voice_map)
@@ -222,7 +222,18 @@ class TestCollapseToTwoSpeakers:
         assert "Narrator" in new_map
         assert new_map["Narrator"] == "Aoede"
         contrast_voice = [v for k, v in new_map.items() if k != "Narrator"][0]
-        assert contrast_voice in _MALE_VOICES
+        # contrast voice is a different female voice (not the same as narrator's)
+        assert contrast_voice != "Aoede"
+
+    def test_all_same_voice_gets_distinct_contrast(self):
+        from backend.services.tts_service import _collapse_to_two_speakers
+        # LLM assigned same voice to all — safety fallback must pick a different voice
+        text = "Narrator: A.\nAlice: B.\nBeth: C."
+        voice_map = {"Narrator": "Aoede", "Alice": "Aoede", "Beth": "Aoede"}
+        new_text, new_map = _collapse_to_two_speakers(text, voice_map)
+        assert len(new_map) == 2
+        contrast_voice = [v for k, v in new_map.items() if k != "Narrator"][0]
+        assert contrast_voice != "Aoede"
 
     def test_narrator_voice_never_changes(self):
         from backend.services.tts_service import _collapse_to_two_speakers

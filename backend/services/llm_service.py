@@ -45,8 +45,10 @@ def _system_prompt(tts_provider: str) -> str:
         "the language specified by the user. All other fields — character names, traits, "
         "voice names, speakers lists, and all keys — must remain in English.\n"
         "- Character names in the 'text' field must be the same English names as in 'characters'.\n"
-        "- Assign voices with gender contrast: Narrator and characters should prefer opposite-gender "
-        "voices (e.g. female Narrator → male characters use male voices).\n"
+        "- Every character must have a UNIQUE voice — never assign the same voice to two characters.\n"
+        "- Female voices: Aoede, Kore, Zephyr, Leda. Male voices: Charon, Fenrir, Puck, Orus.\n"
+        "- Use gender contrast: if Narrator uses a female voice, assign male voices to male "
+        "characters and vice versa. Mix genders across characters for the best listening experience.\n"
         f"- Voice names must use title case: {voices}."
     )
 
