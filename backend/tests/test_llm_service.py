@@ -1,4 +1,4 @@
-import pytest
+import json
 from unittest.mock import patch, MagicMock
 
 
@@ -54,7 +54,6 @@ class TestGenerateScript:
                 }
             ],
         }
-        import json
         with patch("backend.services.llm_service.litellm") as mock_litellm:
             mock_litellm.completion.return_value = _mock_llm_response(json.dumps(fake_output))
             result = generate_script(
@@ -78,7 +77,6 @@ class TestGenerateScript:
                 {"index": 1, "text": "y", "speakers": [], "duration_ms": 0, "status": "ready"},
             ],
         }
-        import json
         with patch("backend.services.llm_service.litellm") as mock_litellm:
             mock_litellm.completion.return_value = _mock_llm_response(json.dumps(fake_output))
             result = generate_script(
