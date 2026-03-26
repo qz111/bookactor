@@ -111,7 +111,7 @@ async def _generate_chunk_gemini(client, chunk: dict) -> dict:
         from google.genai import types
 
         voice_map = {
-            name: _OPENAI_TO_GEMINI.get(v.lower(), v).capitalize()
+            name: _OPENAI_TO_GEMINI.get(v.lower(), v)
             for name, v in chunk["voice_map"].items()
         }
 
