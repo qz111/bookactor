@@ -22,16 +22,28 @@ _OPENAI_TO_GEMINI = {
     "onyx": "Kore", "nova": "Puck", "shimmer": "Zephyr",
 }
 
-# Gender classification for Gemini voices (used when collapsing 3+ speakers to 2).
+# Gender classification for Gemini voices.
 _FEMALE_VOICES = {"Aoede", "Kore", "Zephyr", "Leda"}
+_MALE_VOICES = {"Charon", "Fenrir", "Puck", "Orus"}
+# Default contrasting voice when no naturally opposing voice exists.
+_DEFAULT_FEMALE = "Aoede"
+_DEFAULT_MALE = "Charon"
+
+
+def _contrasting_voice(narrator_voice: str) -> str:
+    """Return a voice of the opposite gender to narrator_voice."""
+    if narrator_voice in _FEMALE_VOICES:
+        return _DEFAULT_MALE
+    return _DEFAULT_FEMALE
 
 
 def _collapse_to_two_speakers(text: str, voice_map: dict[str, str]) -> tuple[str, dict[str, str]]:
     """Collapse 3+ speakers to exactly 2 for Gemini multi-speaker API.
 
-    Groups characters by voice gender: narrator's gender group vs contrasting group.
-    All same-gender-as-narrator characters are merged under the narrator's speaker
-    label. All contrasting-gender characters share the first contrasting speaker label.
+    Groups by voice gender: same-gender-as-narrator speakers are merged under the
+    narrator label. Contrasting-gender speakers share the first contrasting label.
+    When all speakers share the narrator's gender, a default opposite-gender voice
+    is assigned to the contrast speaker so the two voices are always distinct.
     Narrator's voice and name are never changed.
     """
     narrator_name = next(
@@ -56,13 +68,14 @@ def _collapse_to_two_speakers(text: str, voice_map: dict[str, str]) -> tuple[str
                 contrast_voice = voice
 
     if not contrast_group:
-        # All same gender — treat first non-narrator as the contrast speaker.
-        for name, voice in voice_map.items():
+        # All same gender — pick first non-narrator as contrast speaker and force
+        # an opposite-gender voice so the two voices are genuinely distinct.
+        for name in voice_map:
             if name != narrator_name:
                 contrast_group.append(name)
-                contrast_voice = voice
                 break
         same_group = [narrator_name]
+        contrast_voice = _contrasting_voice(narrator_voice)
 
     contrast_name = contrast_group[0]
     new_voice_map = {narrator_name: narrator_voice, contrast_name: contrast_voice}
@@ -182,6 +195,18 @@ async def _generate_chunk_gemini(client, chunk: dict) -> dict:
         text = chunk["text"]
         if len(voice_map) > 2:
             text, voice_map = _collapse_to_two_speakers(text, voice_map)
+
+        # For 2-speaker mode: ensure the two voices are genuinely distinct.
+        # If the LLM assigned the same voice to both, force the non-narrator to
+        # the opposite-gender default so they sound different.
+        if len(voice_map) == 2:
+            names = list(voice_map.keys())
+            if voice_map[names[0]] == voice_map[names[1]]:
+                narrator_name = next(
+                    (n for n in names if n.lower() == "narrator"), names[0]
+                )
+                other_name = names[1] if names[0] == narrator_name else names[0]
+                voice_map[other_name] = _contrasting_voice(voice_map[narrator_name])
 
         if len(voice_map) >= 2:
             speech_config = types.SpeechConfig(

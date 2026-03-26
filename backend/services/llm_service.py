@@ -41,7 +41,12 @@ def _system_prompt(tts_provider: str) -> str:
         "- 'speakers' lists every character name that appears in that chunk's text.\n"
         "- Narrator and characters flow naturally together.\n"
         "- 'duration_ms' is always 0.\n"
-        "- All dialogue text must be in the language specified by the user.\n"
+        "- LANGUAGE RULE: Only the 'text' field inside each chunk must be written in "
+        "the language specified by the user. All other fields — character names, traits, "
+        "voice names, speakers lists, and all keys — must remain in English.\n"
+        "- Character names in the 'text' field must be the same English names as in 'characters'.\n"
+        "- Assign voices with gender contrast: Narrator and characters should prefer opposite-gender "
+        "voices (e.g. female Narrator → male characters use male voices).\n"
         f"- Voice names must use title case: {voices}."
     )
 

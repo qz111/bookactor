@@ -212,14 +212,17 @@ class TestCollapseToTwoSpeakers:
         # Mother's line now attributed to Narrator
         assert new_text.count("Narrator:") == 2
 
-    def test_all_same_gender_uses_first_non_narrator_as_contrast(self):
-        from backend.services.tts_service import _collapse_to_two_speakers
-        # All female voices — no contrasting gender
+    def test_all_same_gender_forces_contrasting_voice(self):
+        from backend.services.tts_service import _collapse_to_two_speakers, _MALE_VOICES
+        # All female voices — contrast speaker must get a male voice
         text = "Narrator: A.\nAlice: B.\nBeth: C."
         voice_map = {"Narrator": "Aoede", "Alice": "Kore", "Beth": "Zephyr"}
         new_text, new_map = _collapse_to_two_speakers(text, voice_map)
         assert len(new_map) == 2
         assert "Narrator" in new_map
+        assert new_map["Narrator"] == "Aoede"
+        contrast_voice = [v for k, v in new_map.items() if k != "Narrator"][0]
+        assert contrast_voice in _MALE_VOICES
 
     def test_narrator_voice_never_changes(self):
         from backend.services.tts_service import _collapse_to_two_speakers
