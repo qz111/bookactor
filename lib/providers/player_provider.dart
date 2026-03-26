@@ -68,7 +68,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
   void goToChunk(int index) {
     final ready = state.readyChunks;
     if (index >= 0 && index < ready.length) {
-      state = state.copyWith(currentChunkIndex: index, isPlaying: true);
+      state = state.copyWith(currentChunkIndex: index);
     }
   }
 

@@ -93,5 +93,13 @@ void main() {
       notifier().goToChunk(2);
       expect(notifier().isAtLastChunk, true);
     });
+
+    test('goToChunk out-of-bounds is a no-op', () {
+      notifier().loadScript(Script.fromJson(_scriptJson));
+      notifier().goToChunk(99);
+      expect(state().currentChunkIndex, 0); // unchanged
+      notifier().goToChunk(-1);
+      expect(state().currentChunkIndex, 0); // unchanged
+    });
   });
 }
