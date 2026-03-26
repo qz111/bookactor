@@ -145,13 +145,12 @@ class TestGenerateChunkGemini:
 
         with patch.object(tts_service, "_pcm_to_wav", return_value=fake_wav), \
              patch.object(tts_service, "_append_silence", return_value=fake_wav):
-            asyncio.run(tts_service._generate_chunk_gemini(
+            result = asyncio.run(tts_service._generate_chunk_gemini(
                 mock_client,
                 {"index": 1, "text": "Narrator: Once upon a time.", "voice_map": {"Narrator": "Aoede"}}
             ))
-
-        # Verify generate_content was called (config inspection is complex; check index/status)
-        assert mock_client.models.generate_content.called
+        assert result["status"] == "ready"
+        assert result["duration_ms"] > 0
 
     def test_error_returns_zero_duration(self):
         from backend.services import tts_service
@@ -268,8 +267,7 @@ class TestGenerateAudio:
         with patch("backend.services.tts_service._generate_gemini_throttled", side_effect=fake_throttled), \
              patch("backend.services.tts_service.genai") as mock_genai:
             mock_genai.Client.return_value = MagicMock()
-            import asyncio as _asyncio
-            result = _asyncio.run(tts_service.generate_audio(
+            result = asyncio.run(tts_service.generate_audio(
                 chunks=chunks, tts_provider="gemini",
                 openai_api_key="", google_api_key="k"
             ))
@@ -292,10 +290,26 @@ class TestGenerateAudio:
         with patch("backend.services.tts_service._generate_gemini_throttled", side_effect=fake_throttled), \
              patch("backend.services.tts_service.genai") as mock_genai:
             mock_genai.Client.return_value = MagicMock()
-            import asyncio as _asyncio
-            result = _asyncio.run(tts_service.generate_audio(
+            result = asyncio.run(tts_service.generate_audio(
                 chunks=chunks, tts_provider="gemini",
                 openai_api_key="", google_api_key="k"
             ))
         assert result[0]["index"] == 0
         assert result[1]["index"] == 1
+
+    def test_routes_to_openai(self):
+        from backend.services import tts_service
+        chunks = [{"index": 0, "text": "Narrator: Hi.", "voice_map": {"Narrator": "alloy"}}]
+
+        async def fake_openai_chunk(client, chunk):
+            return {"index": chunk["index"], "status": "ready", "audio_b64": "x", "duration_ms": 500}
+
+        with patch("backend.services.tts_service._generate_chunk_openai", side_effect=fake_openai_chunk), \
+             patch("backend.services.tts_service.AsyncOpenAI") as mock_openai:
+            mock_openai.return_value = MagicMock()
+            result = asyncio.run(tts_service.generate_audio(
+                chunks=chunks, tts_provider="openai",
+                openai_api_key="key", google_api_key=""
+            ))
+        assert result[0]["status"] == "ready"
+        assert result[0]["duration_ms"] == 500
