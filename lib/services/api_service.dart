@@ -52,7 +52,7 @@ class ApiService {
     required List<Map<String, dynamic>> vlmOutput,
     required String language,
     required String llmProvider,
-    required String ttsProvider,
+    String ttsProvider = 'openai',
   }) async {
     final response = await client.post(
       Uri.parse('$baseUrl/script'),
@@ -72,14 +72,14 @@ class ApiService {
   }
 
   Future<List<Map<String, dynamic>>> generateAudio({
-    required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> chunks,
     String ttsProvider = 'openai',
   }) async {
     final response = await client.post(
       Uri.parse('$baseUrl/tts'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode({
-        'lines': lines,
+        'chunks': chunks,
         'tts_provider': ttsProvider,
         'openai_api_key': openAiKey,
         'google_api_key': googleKey,

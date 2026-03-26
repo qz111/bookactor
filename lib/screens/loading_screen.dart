@@ -194,7 +194,7 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
           .toList();
 
       final audioResults = await api.generateAudio(
-        lines: pendingLines,
+        chunks: pendingLines,
         ttsProvider: p.ttsProvider,
       );
       final scriptLines = List<Map<String, dynamic>>.from(lines);

@@ -100,14 +100,16 @@ void main() {
   });
 
   group('generateAudio', () {
-    test('posts lines + openai_api_key and returns audio results', () async {
+    test('posts chunks with voice_map and returns results with duration_ms', () async {
       final fakeResults = [
-        {'index': 0, 'status': 'ready', 'audio_b64': base64Encode([1, 2, 3])}
+        {'index': 0, 'status': 'ready', 'audio_b64': base64Encode([1, 2, 3]), 'duration_ms': 8400}
       ];
       final client = MockClient((request) async {
         expect(request.url.path, '/tts');
         final body = jsonDecode(request.body) as Map;
-        expect(body['lines'], isNotEmpty);
+        expect(body['chunks'], isNotEmpty);
+        expect(body['chunks'][0]['voice_map'], isA<Map>());
+        expect(body.containsKey('lines'), false);
         expect(body['openai_api_key'], 'test-openai-key');
         return http.Response(
           jsonEncode(fakeResults),
@@ -117,10 +119,11 @@ void main() {
       });
 
       final service = makeService(client);
-      final result = await service.generateAudio(lines: [
-        {'index': 0, 'text': 'Hi', 'voice': 'alloy'}
+      final result = await service.generateAudio(chunks: [
+        {'index': 0, 'text': 'Narrator: Hi.', 'voice_map': {'Narrator': 'Aoede'}}
       ]);
       expect(result.first['status'], 'ready');
+      expect(result.first['duration_ms'], 8400);
     });
   });
 }
