@@ -106,14 +106,14 @@ async def _generate_chunk_openai(client: AsyncOpenAI, chunk: dict) -> dict:
 
 
 async def _generate_chunk_gemini(client, chunk: dict) -> dict:
-    """Generate audio for a chunk using Gemini TTS (multi-speaker when >1 voice)."""
+    """Generate audio for a chunk using Gemini TTS (multi-speaker when exactly 2 voices)."""
     try:
         voice_map = {
             name: _OPENAI_TO_GEMINI.get(v.lower(), v)
             for name, v in chunk["voice_map"].items()
         }
 
-        if len(voice_map) > 1:
+        if len(voice_map) == 2:
             speech_config = types.SpeechConfig(
                 multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
                     speaker_voice_configs=[
