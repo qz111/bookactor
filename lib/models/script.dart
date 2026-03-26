@@ -21,58 +21,56 @@ class ScriptCharacter {
       };
 }
 
-class ScriptLine {
+class ScriptChunk {
   final int index;
-  final String character;
   final String text;
-  final int page;
+  final List<String> speakers;
+  final int durationMs;
   final String status;
 
-  const ScriptLine({
+  const ScriptChunk({
     required this.index,
-    required this.character,
     required this.text,
-    required this.page,
+    required this.speakers,
+    required this.durationMs,
     required this.status,
   });
 
-  factory ScriptLine.fromJson(Map<String, dynamic> json) => ScriptLine(
+  factory ScriptChunk.fromJson(Map<String, dynamic> json) => ScriptChunk(
         index: json['index'] as int,
-        character: json['character'] as String,
         text: json['text'] as String,
-        page: json['page'] as int,
+        speakers: List<String>.from(json['speakers'] as List),
+        durationMs: (json['duration_ms'] as num).toInt(),
         status: json['status'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'index': index,
-        'character': character,
         'text': text,
-        'page': page,
+        'speakers': speakers,
+        'duration_ms': durationMs,
         'status': status,
       };
 
-  ScriptLine copyWith({String? status}) => ScriptLine(
+  ScriptChunk copyWith({String? status, int? durationMs}) => ScriptChunk(
         index: index,
-        character: character,
         text: text,
-        page: page,
+        speakers: speakers,
+        durationMs: durationMs ?? this.durationMs,
         status: status ?? this.status,
       );
 }
 
 class Script {
   final List<ScriptCharacter> characters;
-  final List<ScriptLine> lines;
+  final List<ScriptChunk> chunks;
 
-  const Script({required this.characters, required this.lines});
+  const Script({required this.characters, required this.chunks});
 
-  /// Looks up the OpenAI voice for a character by name.
-  /// voice is NOT stored on lines — always resolved from this method.
-  /// Defaults to 'alloy' if character not found.
+  /// Looks up the voice for a character by name.
+  /// Defaults to 'alloy' if not found.
   String voiceFor(String characterName) {
-    final match =
-        characters.where((c) => c.name == characterName).firstOrNull;
+    final match = characters.where((c) => c.name == characterName).firstOrNull;
     return match?.voice ?? 'alloy';
   }
 
@@ -82,14 +80,14 @@ class Script {
       characters: (map['characters'] as List)
           .map((c) => ScriptCharacter.fromJson(c as Map<String, dynamic>))
           .toList(),
-      lines: (map['lines'] as List)
-          .map((l) => ScriptLine.fromJson(l as Map<String, dynamic>))
+      chunks: (map['chunks'] as List)
+          .map((c) => ScriptChunk.fromJson(c as Map<String, dynamic>))
           .toList(),
     );
   }
 
   String toJson() => jsonEncode({
         'characters': characters.map((c) => c.toJson()).toList(),
-        'lines': lines.map((l) => l.toJson()).toList(),
+        'chunks': chunks.map((c) => c.toJson()).toList(),
       });
 }

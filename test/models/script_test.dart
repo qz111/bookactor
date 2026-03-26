@@ -5,47 +5,67 @@ void main() {
   const scriptJson = '''
 {
   "characters": [
-    {"name": "Narrator", "voice": "alloy"},
-    {"name": "Little Bear", "voice": "nova", "traits": "curious"}
+    {"name": "Narrator", "voice": "Aoede"},
+    {"name": "Bear", "voice": "Charon", "traits": "deep"}
   ],
-  "lines": [
-    {"index": 0, "character": "Narrator", "text": "Once upon a time", "page": 1, "status": "ready"},
-    {"index": 1, "character": "Little Bear", "text": "Hello!", "page": 1, "status": "ready"}
+  "chunks": [
+    {
+      "index": 0,
+      "text": "Narrator: Hello.\\nBear: Hi!",
+      "speakers": ["Narrator", "Bear"],
+      "duration_ms": 5000,
+      "status": "ready"
+    },
+    {
+      "index": 1,
+      "text": "Narrator: The end.",
+      "speakers": ["Narrator"],
+      "duration_ms": 2000,
+      "status": "pending"
+    }
   ]
 }
 ''';
 
   group('Script', () {
     late Script script;
-
     setUp(() => script = Script.fromJson(scriptJson));
 
-    test('parses characters correctly', () {
+    test('parses characters', () {
       expect(script.characters.length, 2);
       expect(script.characters[0].name, 'Narrator');
-      expect(script.characters[0].voice, 'alloy');
+      expect(script.characters[0].voice, 'Aoede');
     });
 
-    test('parses lines correctly', () {
-      expect(script.lines.length, 2);
-      expect(script.lines[1].character, 'Little Bear');
-      expect(script.lines[1].page, 1);
-      expect(script.lines[1].status, 'ready');
+    test('parses chunks', () {
+      expect(script.chunks.length, 2);
+      expect(script.chunks[0].index, 0);
+      expect(script.chunks[0].speakers, ['Narrator', 'Bear']);
+      expect(script.chunks[0].durationMs, 5000);
+      expect(script.chunks[0].status, 'ready');
     });
 
     test('voiceFor returns correct voice', () {
-      expect(script.voiceFor('Narrator'), 'alloy');
-      expect(script.voiceFor('Little Bear'), 'nova');
+      expect(script.voiceFor('Narrator'), 'Aoede');
+      expect(script.voiceFor('Bear'), 'Charon');
     });
 
-    test('voiceFor unknown character defaults to alloy', () {
+    test('voiceFor unknown defaults to alloy', () {
       expect(script.voiceFor('Unknown'), 'alloy');
     });
 
     test('toJson/fromJson round-trips', () {
       final restored = Script.fromJson(script.toJson());
-      expect(restored.lines.length, script.lines.length);
-      expect(restored.characters[0].voice, 'alloy');
+      expect(restored.chunks.length, 2);
+      expect(restored.chunks[0].durationMs, 5000);
+      expect(restored.characters[0].voice, 'Aoede');
+    });
+
+    test('ScriptChunk.copyWith updates status', () {
+      final updated = script.chunks[1].copyWith(status: 'ready', durationMs: 3000);
+      expect(updated.status, 'ready');
+      expect(updated.durationMs, 3000);
+      expect(updated.index, 1);
     });
   });
 }

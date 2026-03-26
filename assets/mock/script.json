@@ -4,13 +4,20 @@
     {"name": "Little Bear", "voice": "nova", "traits": "curious, playful"},
     {"name": "Mother Bear", "voice": "shimmer", "traits": "warm, gentle"}
   ],
-  "lines": [
-    {"index": 0, "character": "Narrator", "text": "Once upon a time, in a cozy little den...", "page": 1, "status": "ready"},
-    {"index": 1, "character": "Little Bear", "text": "Good morning, Mama!", "page": 1, "status": "ready"},
-    {"index": 2, "character": "Mother Bear", "text": "Good morning, my little one. Did you sleep well?", "page": 2, "status": "ready"},
-    {"index": 3, "character": "Narrator", "text": "Little Bear looked out the window and saw the world covered in snow.", "page": 2, "status": "ready"},
-    {"index": 4, "character": "Little Bear", "text": "Mama, can we go play outside? Please?", "page": 3, "status": "ready"},
-    {"index": 5, "character": "Mother Bear", "text": "After breakfast, my dear.", "page": 3, "status": "ready"},
-    {"index": 6, "character": "Narrator", "text": "And so they had a warm breakfast together before their snowy adventure.", "page": 4, "status": "ready"}
+  "chunks": [
+    {
+      "index": 0,
+      "text": "Narrator: Once upon a time, in a cozy little den...\nLittle Bear: Good morning, Mama!\nMother Bear: Good morning, my little one. Did you sleep well?\nNarrator: Little Bear looked out the window and saw the world covered in snow.",
+      "speakers": ["Narrator", "Little Bear", "Mother Bear"],
+      "duration_ms": 12000,
+      "status": "ready"
+    },
+    {
+      "index": 1,
+      "text": "Little Bear: Mama, can we go play outside? Please?\nMother Bear: After breakfast, my dear.\nNarrator: And so they had a warm breakfast together before their snowy adventure.",
+      "speakers": ["Little Bear", "Mother Bear", "Narrator"],
+      "duration_ms": 10000,
+      "status": "ready"
+    }
   ]
 }
