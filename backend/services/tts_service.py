@@ -16,8 +16,8 @@ GEMINI_VOICES = ["Aoede", "Charon", "Fenrir", "Kore", "Puck", "Zephyr", "Leda", 
 
 # Fallback map for scripts generated with OpenAI voices but played via Gemini TTS.
 _OPENAI_TO_GEMINI = {
-    "alloy": "aoede", "echo": "charon", "fable": "fenrir",
-    "onyx": "kore", "nova": "puck", "shimmer": "zephyr",
+    "alloy": "Aoede", "echo": "Charon", "fable": "Fenrir",
+    "onyx": "Kore", "nova": "Puck", "shimmer": "Zephyr",
 }
 
 
@@ -30,6 +30,12 @@ def _pcm_to_wav(pcm_bytes: bytes) -> bytes:
         w.setframerate(24000)
         w.writeframes(pcm_bytes)
     return buf.getvalue()
+
+
+def _wav_duration_ms(wav_bytes: bytes) -> int:
+    """Return duration in milliseconds of a WAV file."""
+    with wave.open(io.BytesIO(wav_bytes)) as w:
+        return int(w.getnframes() / w.getframerate() * 1000)
 
 
 def _append_silence(audio_bytes: bytes, fmt: str, duration_ms: int = 600) -> bytes:
@@ -99,21 +105,76 @@ async def _generate_one_gemini(client, line: dict) -> dict:
         return {"index": line["index"], "status": "error"}
 
 
-async def _generate_gemini_throttled(client, lines: list[dict], rpm: int = 10) -> list[dict]:
-    """Generate Gemini TTS one line at a time, respecting the RPM limit."""
-    min_interval = 60.0 / rpm  # 6 s between request starts at 10 RPM
+async def _generate_chunk_gemini(client, chunk: dict) -> dict:
+    """Generate audio for a chunk using Gemini TTS (multi-speaker when >1 voice)."""
+    try:
+        from google.genai import types
+
+        voice_map = {
+            name: _OPENAI_TO_GEMINI.get(v.lower(), v).capitalize()
+            for name, v in chunk["voice_map"].items()
+        }
+
+        if len(voice_map) > 1:
+            speech_config = types.SpeechConfig(
+                multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
+                    speaker_voice_configs=[
+                        types.SpeakerVoiceConfig(
+                            speaker=name,
+                            voice_config=types.VoiceConfig(
+                                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
+                            ),
+                        )
+                        for name, voice in voice_map.items()
+                    ]
+                )
+            )
+        else:
+            voice = list(voice_map.values())[0]
+            speech_config = types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
+                )
+            )
+
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-2.5-pro-preview-tts",
+            contents=chunk["text"],
+            config=types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=speech_config,
+            ),
+        )
+        candidate = response.candidates[0]
+        if candidate.content is None:
+            finish = getattr(candidate, "finish_reason", "unknown")
+            raise ValueError(f"Gemini returned no content (finish_reason={finish})")
+        pcm_bytes = candidate.content.parts[0].inline_data.data
+        wav_bytes = _pcm_to_wav(pcm_bytes)
+        wav_with_silence = _append_silence(wav_bytes, "wav")
+        duration_ms = _wav_duration_ms(wav_with_silence)
+        audio_b64 = base64.b64encode(wav_with_silence).decode()
+        return {"index": chunk["index"], "status": "ready", "audio_b64": audio_b64, "duration_ms": duration_ms}
+    except Exception:
+        logger.exception("Gemini TTS failed for chunk %d", chunk["index"])
+        return {"index": chunk["index"], "status": "error", "duration_ms": 0}
+
+
+async def _generate_gemini_throttled(client, chunks: list[dict], rpm: int = 10) -> list[dict]:
+    """Generate Gemini TTS one chunk at a time, respecting the RPM limit."""
+    min_interval = 60.0 / rpm
     results = []
     last_start: float | None = None
 
-    for line in lines:
+    for chunk in chunks:
         if last_start is not None:
             elapsed = asyncio.get_event_loop().time() - last_start
             wait = min_interval - elapsed
             if wait > 0:
                 await asyncio.sleep(wait)
-
         last_start = asyncio.get_event_loop().time()
-        result = await _generate_one_gemini(client, line)
+        result = await _generate_chunk_gemini(client, chunk)
         results.append(result)
 
     return results

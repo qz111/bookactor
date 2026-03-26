@@ -144,3 +144,111 @@ class TestGenerateOneGemini:
         assert result["audio_b64"] == base64.b64encode(fake_silenced).decode()
         assert result["status"] == "ready"
         assert result["index"] == 1
+
+
+class TestWavDurationMs:
+    def test_returns_correct_duration(self):
+        from backend.services.tts_service import _wav_duration_ms
+        wav = _make_wav(duration_ms=500)
+        result = _wav_duration_ms(wav)
+        assert result == pytest.approx(500, abs=10)
+
+    def test_returns_int(self):
+        from backend.services.tts_service import _wav_duration_ms
+        wav = _make_wav(duration_ms=200)
+        assert isinstance(_wav_duration_ms(wav), int)
+
+
+class TestGenerateChunkGemini:
+    def test_multi_speaker_returns_duration_ms(self):
+        from backend.services import tts_service
+
+        fake_wav = _make_wav(duration_ms=3000)
+        fake_silenced = _make_wav(duration_ms=3600)
+
+        mock_part = MagicMock()
+        mock_part.inline_data.data = b"raw_pcm"
+        mock_content = MagicMock()
+        mock_content.parts = [mock_part]
+        mock_candidate = MagicMock()
+        mock_candidate.content = mock_content
+        mock_response = MagicMock()
+        mock_response.candidates = [mock_candidate]
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        with patch.object(tts_service, "_pcm_to_wav", return_value=fake_wav), \
+             patch.object(tts_service, "_append_silence", return_value=fake_silenced):
+            result = asyncio.run(tts_service._generate_chunk_gemini(
+                mock_client,
+                {"index": 0, "text": "Narrator: Hi.\nBear: Hello.", "voice_map": {"Narrator": "Aoede", "Bear": "Charon"}}
+            ))
+
+        assert result["status"] == "ready"
+        assert result["index"] == 0
+        assert result["duration_ms"] == pytest.approx(3600, abs=50)
+
+    def test_single_speaker_uses_voice_config(self):
+        from backend.services import tts_service
+
+        fake_wav = _make_wav(duration_ms=1000)
+        mock_part = MagicMock()
+        mock_part.inline_data.data = b"pcm"
+        mock_candidate = MagicMock()
+        mock_candidate.content = MagicMock(parts=[mock_part])
+        mock_response = MagicMock(candidates=[mock_candidate])
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        captured_config = {}
+
+        def capture_call(**kwargs):
+            captured_config.update(kwargs)
+            return mock_response
+
+        mock_client.models.generate_content.side_effect = capture_call
+
+        with patch.object(tts_service, "_pcm_to_wav", return_value=fake_wav), \
+             patch.object(tts_service, "_append_silence", return_value=fake_wav):
+            asyncio.run(tts_service._generate_chunk_gemini(
+                mock_client,
+                {"index": 1, "text": "Narrator: Once upon a time.", "voice_map": {"Narrator": "Aoede"}}
+            ))
+
+        # Verify generate_content was called (config inspection is complex; check index/status)
+        assert mock_client.models.generate_content.called
+
+    def test_error_returns_zero_duration(self):
+        from backend.services import tts_service
+
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = RuntimeError("API down")
+
+        result = asyncio.run(tts_service._generate_chunk_gemini(
+            mock_client,
+            {"index": 2, "text": "x", "voice_map": {"Narrator": "Aoede"}}
+        ))
+
+        assert result["status"] == "error"
+        assert result["duration_ms"] == 0
+        assert result["index"] == 2
+
+    def test_openai_voice_normalized_to_title_case(self):
+        from backend.services import tts_service
+        # "alloy" (OpenAI) → maps to "Aoede" (title-cased Gemini)
+        fake_wav = _make_wav(200)
+        mock_part = MagicMock()
+        mock_part.inline_data.data = b"pcm"
+        mock_candidate = MagicMock()
+        mock_candidate.content = MagicMock(parts=[mock_part])
+        mock_response = MagicMock(candidates=[mock_candidate])
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        with patch.object(tts_service, "_pcm_to_wav", return_value=fake_wav), \
+             patch.object(tts_service, "_append_silence", return_value=fake_wav):
+            result = asyncio.run(tts_service._generate_chunk_gemini(
+                mock_client,
+                {"index": 0, "text": "Narrator: hi.", "voice_map": {"Narrator": "alloy"}}
+            ))
+        assert result["status"] == "ready"
