@@ -1,20 +1,20 @@
 import logging
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from backend.services.tts_service import generate_audio
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class TtsLine(BaseModel):
+class TtsChunk(BaseModel):
     index: int
     text: str
-    voice: str
+    voice_map: dict[str, str]  # {"Narrator": "Aoede", "Bear": "Charon"}
 
 
 class TtsRequest(BaseModel):
-    lines: list[TtsLine]
+    chunks: list[TtsChunk]
     tts_provider: str = "openai"
     openai_api_key: str = ""
     google_api_key: str = ""
@@ -22,11 +22,11 @@ class TtsRequest(BaseModel):
 
 @router.post("/tts")
 async def tts(req: TtsRequest):
-    """Generate TTS audio for all lines in parallel."""
-    lines = [line.model_dump() for line in req.lines]
+    """Generate TTS audio for all chunks."""
+    chunks = [chunk.model_dump() for chunk in req.chunks]
     try:
         return await generate_audio(
-            lines=lines,
+            chunks=chunks,
             tts_provider=req.tts_provider,
             openai_api_key=req.openai_api_key,
             google_api_key=req.google_api_key,
