@@ -94,6 +94,47 @@ class TestWavDurationMs:
         assert isinstance(_wav_duration_ms(wav), int)
 
 
+class TestTwoSpeakerDeduplication:
+    def test_same_voice_assigned_gets_different_same_gender_voice(self):
+        """2-speaker chunk where LLM gave both the same voice → non-narrator gets a
+        different voice from the same gender pool."""
+        from backend.services.tts_service import _FEMALE_VOICES
+        import asyncio as _asyncio
+        from backend.services import tts_service
+
+        fake_wav = _make_wav(500)
+        mock_part = MagicMock()
+        mock_part.inline_data.data = b"pcm"
+        mock_candidate = MagicMock()
+        mock_candidate.content = MagicMock(parts=[mock_part])
+        mock_response = MagicMock(candidates=[mock_candidate])
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        captured = {}
+
+        def capture(**kwargs):
+            captured["config"] = kwargs.get("config")
+            return mock_response
+
+        mock_client.models.generate_content.side_effect = capture
+
+        with patch.object(tts_service, "_pcm_to_wav", return_value=fake_wav), \
+             patch.object(tts_service, "_append_silence", return_value=fake_wav):
+            _asyncio.run(tts_service._generate_chunk_gemini(
+                mock_client,
+                {"index": 0, "text": "Narrator: Hi.\nAlice: Hello.",
+                 "voice_map": {"Narrator": "Aoede", "Alice": "Aoede"}}
+            ))
+
+        # Both were assigned Aoede — Alice must be reassigned to a different female voice
+        configs = captured["config"].speech_config.multi_speaker_voice_config.speaker_voice_configs
+        voices_used = {c.speaker: c.voice_config.prebuilt_voice_config.voice_name for c in configs}
+        assert voices_used["Narrator"] == "Aoede"
+        assert voices_used["Alice"] != "Aoede"
+        assert voices_used["Alice"] in _FEMALE_VOICES
+
+
 class TestGenerateChunkGemini:
     def test_multi_speaker_returns_duration_ms(self):
         from backend.services import tts_service
@@ -225,15 +266,16 @@ class TestCollapseToTwoSpeakers:
         # contrast voice is a different female voice (not the same as narrator's)
         assert contrast_voice != "Aoede"
 
-    def test_all_same_voice_gets_distinct_contrast(self):
-        from backend.services.tts_service import _collapse_to_two_speakers
-        # LLM assigned same voice to all — safety fallback must pick a different voice
+    def test_all_same_voice_gets_distinct_same_gender_contrast(self):
+        from backend.services.tts_service import _collapse_to_two_speakers, _FEMALE_VOICES
+        # LLM assigned same voice to all — safety fallback picks a different same-gender voice
         text = "Narrator: A.\nAlice: B.\nBeth: C."
         voice_map = {"Narrator": "Aoede", "Alice": "Aoede", "Beth": "Aoede"}
         new_text, new_map = _collapse_to_two_speakers(text, voice_map)
         assert len(new_map) == 2
         contrast_voice = [v for k, v in new_map.items() if k != "Narrator"][0]
         assert contrast_voice != "Aoede"
+        assert contrast_voice in _FEMALE_VOICES  # same gender, different voice
 
     def test_narrator_voice_never_changes(self):
         from backend.services.tts_service import _collapse_to_two_speakers

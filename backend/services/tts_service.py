@@ -205,8 +205,8 @@ async def _generate_chunk_gemini(client, chunk: dict) -> dict:
             text, voice_map = _collapse_to_two_speakers(text, voice_map)
 
         # For 2-speaker mode: ensure the two voices are distinct.
-        # If the LLM assigned the same voice to both, give the non-narrator speaker
-        # a different voice — prefer contrasting gender, fall back to same-gender pool.
+        # If the LLM assigned the same voice to both, give the non-narrator a
+        # different voice from the same gender pool (keeps tonal consistency).
         if len(voice_map) == 2:
             names = list(voice_map.keys())
             if voice_map[names[0]] == voice_map[names[1]]:
@@ -215,12 +215,8 @@ async def _generate_chunk_gemini(client, chunk: dict) -> dict:
                 )
                 other_name = names[1] if names[0] == narrator_name else names[0]
                 nv = voice_map[narrator_name]
-                # Try contrasting gender first, then any other voice.
-                candidate = _contrasting_voice(nv)
-                if candidate == nv:
-                    # narrator_voice not in either set — pick first available voice
-                    all_voices = list(_FEMALE_VOICES | _MALE_VOICES)
-                    candidate = next((v for v in all_voices if v != nv), all_voices[0])
+                same_pool = list(_FEMALE_VOICES if nv in _FEMALE_VOICES else _MALE_VOICES)
+                candidate = next((v for v in same_pool if v != nv), _contrasting_voice(nv))
                 voice_map[other_name] = candidate
 
         if len(voice_map) >= 2:
