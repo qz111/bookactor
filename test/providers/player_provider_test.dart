@@ -6,94 +6,92 @@ import 'package:bookactor/providers/player_provider.dart';
 const _scriptJson = '''
 {
   "characters": [
-    {"name": "Narrator", "voice": "alloy"},
-    {"name": "Little Bear", "voice": "nova"}
+    {"name": "Narrator", "voice": "Aoede"},
+    {"name": "Bear", "voice": "Charon"}
   ],
-  "lines": [
-    {"index": 0, "character": "Narrator", "text": "Line 0", "page": 1, "status": "ready"},
-    {"index": 1, "character": "Little Bear", "text": "Line 1", "page": 1, "status": "error"},
-    {"index": 2, "character": "Narrator", "text": "Line 2", "page": 2, "status": "ready"},
-    {"index": 3, "character": "Little Bear", "text": "Line 3", "page": 2, "status": "ready"}
+  "chunks": [
+    {"index": 0, "text": "Narrator: A.", "speakers": ["Narrator"], "duration_ms": 3000, "status": "ready"},
+    {"index": 1, "text": "Bear: B.", "speakers": ["Bear"], "duration_ms": 0, "status": "error"},
+    {"index": 2, "text": "Narrator: C.", "speakers": ["Narrator"], "duration_ms": 4000, "status": "ready"},
+    {"index": 3, "text": "Bear: D.", "speakers": ["Bear"], "duration_ms": 2000, "status": "ready"}
   ]
 }
 ''';
 
 void main() {
   late ProviderContainer container;
-
-  setUp(() {
-    container = ProviderContainer();
-  });
-
-  tearDown(() {
-    container.dispose();
-  });
+  setUp(() => container = ProviderContainer());
+  tearDown(() => container.dispose());
 
   PlayerNotifier notifier() => container.read(playerProvider.notifier);
   PlayerState state() => container.read(playerProvider);
 
   group('PlayerNotifier', () {
-    test('initial state has no script and line 0', () {
+    test('initial state has no script and chunk 0', () {
       expect(state().script, isNull);
-      expect(state().currentLine, 0);
+      expect(state().currentChunkIndex, 0);
       expect(state().isPlaying, false);
     });
 
-    test('loadScript sets script and startLine', () {
-      final script = Script.fromJson(_scriptJson);
-      notifier().loadScript(script, startLine: 2);
+    test('loadScript sets script and startChunk', () {
+      notifier().loadScript(Script.fromJson(_scriptJson), startChunk: 1);
       expect(state().script, isNotNull);
-      expect(state().currentLine, 2);
-      expect(state().isPlaying, false);
+      expect(state().currentChunkIndex, 1);
     });
 
-    test('play and pause toggle isPlaying', () {
+    test('readyChunks filters by status', () {
       notifier().loadScript(Script.fromJson(_scriptJson));
-      notifier().play();
-      expect(state().isPlaying, true);
-      notifier().pause();
-      expect(state().isPlaying, false);
+      // chunk index 1 has status error — only 3 ready
+      expect(state().readyChunks.length, 3);
     });
 
-    test('nextLine advances within ready lines only', () {
-      // Ready lines at index 0, 2, 3 — error line at index 1 is skipped
+    test('totalDurationMs sums ready chunk durations', () {
       notifier().loadScript(Script.fromJson(_scriptJson));
-      expect(state().currentLine, 0); // ready line 0
-      notifier().nextLine();
-      expect(state().currentLine, 1); // ready line 1 (which is script index 2)
-      notifier().nextLine();
-      expect(state().currentLine, 2); // ready line 2 (which is script index 3)
-      notifier().nextLine();
-      expect(state().currentLine, 2); // already at last ready line, no-op
+      // 3000 + 4000 + 2000 = 9000 (error chunk excluded)
+      expect(state().totalDurationMs, 9000);
     });
 
-    test('prevLine decrements and stops at 0', () {
-      notifier().loadScript(Script.fromJson(_scriptJson), startLine: 2);
-      notifier().prevLine();
-      expect(state().currentLine, 1);
-      notifier().prevLine();
-      expect(state().currentLine, 0);
-      notifier().prevLine();
-      expect(state().currentLine, 0); // already at 0, no-op
+    test('cumulativeOffsetMs sums durations before current chunk', () {
+      notifier().loadScript(Script.fromJson(_scriptJson));
+      notifier().goToChunk(1); // chunk at position 1 in readyChunks = 4000ms chunk
+      // offset = first ready chunk = 3000ms
+      expect(state().cumulativeOffsetMs, 3000);
     });
 
-    test('currentScriptLine returns correct ready line', () {
-      final script = Script.fromJson(_scriptJson);
-      notifier().loadScript(script);
-      // currentLine=0 → first ready line = script line index 0 ("Line 0")
-      expect(state().currentScriptLine?.text, 'Line 0');
-      notifier().nextLine();
-      // currentLine=1 → second ready line = script line index 2 ("Line 2", skipping error)
-      expect(state().currentScriptLine?.text, 'Line 2');
+    test('nextChunk advances within ready chunks', () {
+      notifier().loadScript(Script.fromJson(_scriptJson));
+      expect(state().currentChunkIndex, 0);
+      notifier().nextChunk();
+      expect(state().currentChunkIndex, 1);
+      notifier().nextChunk();
+      expect(state().currentChunkIndex, 2);
+      notifier().nextChunk();
+      expect(state().currentChunkIndex, 2); // at last, no-op
     });
 
-    test('currentScriptLine returns null when script not loaded', () {
-      expect(state().currentScriptLine, isNull);
+    test('prevChunk decrements and stops at 0', () {
+      notifier().loadScript(Script.fromJson(_scriptJson), startChunk: 2);
+      notifier().prevChunk();
+      expect(state().currentChunkIndex, 1);
+      notifier().prevChunk();
+      expect(state().currentChunkIndex, 0);
+      notifier().prevChunk();
+      expect(state().currentChunkIndex, 0);
     });
 
-    test('nextLine is no-op when script is null', () {
-      notifier().nextLine(); // should not throw
-      expect(state().currentLine, 0);
+    test('currentScriptChunk returns correct ready chunk', () {
+      notifier().loadScript(Script.fromJson(_scriptJson));
+      expect(state().currentScriptChunk?.text, 'Narrator: A.');
+      notifier().nextChunk();
+      // next ready chunk skips the error one
+      expect(state().currentScriptChunk?.text, 'Narrator: C.');
+    });
+
+    test('isAtLastChunk returns true at last ready chunk', () {
+      notifier().loadScript(Script.fromJson(_scriptJson));
+      expect(notifier().isAtLastChunk, false);
+      notifier().goToChunk(2);
+      expect(notifier().isAtLastChunk, true);
     });
   });
 }
