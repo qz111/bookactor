@@ -8,8 +8,6 @@ import '../models/script.dart';
 import '../providers/books_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/audio_service.dart';
-import '../widgets/karaoke_text.dart';
-import '../widgets/audio_controls.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String versionId;
@@ -30,96 +28,102 @@ class PlayerScreen extends ConsumerStatefulWidget {
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   late AudioService _audio;
   StreamSubscription<void>? _completionSub;
+  StreamSubscription<Duration>? _positionSub;
+  double _sliderPositionMs = 0;
 
   @override
   void initState() {
     super.initState();
     _audio = widget.audioService ?? AudioService();
-    _completionSub = _audio.onComplete.listen((_) => _onLineComplete());
+    _completionSub = _audio.onComplete.listen((_) => _onChunkComplete());
+    _positionSub = _audio.positionStream.listen((position) {
+      if (!mounted) return;
+      final playerState = ref.read(playerProvider);
+      final offset = playerState.cumulativeOffsetMs.toDouble();
+      setState(() {
+        _sliderPositionMs = offset + position.inMilliseconds.toDouble();
+      });
+    });
     _loadScript();
   }
 
   Future<void> _loadScript() async {
-    // Phase 2: mock version loads from asset; real versions load from DB
     final String scriptJson;
-    var startLine = 0;
+    var startChunk = 0;
 
     if (widget.versionId == 'mock_book_001_en') {
       scriptJson = await rootBundle.loadString('assets/mock/script.json');
-      // Mock version is not in DB; always start from line 0
       if (!mounted) return;
     } else {
-      final version =
-          await AppDatabase.instance.getAudioVersion(widget.versionId);
+      final version = await AppDatabase.instance.getAudioVersion(widget.versionId);
       if (version == null || !mounted) return;
       scriptJson = version.scriptJson;
-      startLine = version.lastPlayedLine;
+      startChunk = version.lastPlayedLine; // DB field repurposed as lastPlayedChunk
     }
 
     final script = Script.fromJson(scriptJson);
     if (!mounted) return;
-    ref
-        .read(playerProvider.notifier)
-        .loadScript(script, startChunk: startLine);
-
-    // Begin playback of the first (or resumed) line automatically
-    await _loadAndPlayCurrentLine();
+    ref.read(playerProvider.notifier).loadScript(script, startChunk: startChunk);
+    await _loadAndPlayCurrentChunk();
   }
 
-  void _onLineComplete() {
+  void _onChunkComplete() {
     if (!mounted) return;
     final notifier = ref.read(playerProvider.notifier);
-    // Stop at the last line instead of repeating it
     if (notifier.isAtLastChunk) {
       notifier.pause();
       return;
     }
     notifier.nextChunk();
-    _loadAndPlayCurrentLine();
+    _loadAndPlayCurrentChunk();
   }
 
-  Future<void> _restartFromBeginning() async {
-    await _audio.stop();
-    ref.read(playerProvider.notifier).goToChunk(0);
-    await _loadAndPlayCurrentLine();
-  }
-
-  Future<void> _loadAndPlayCurrentLine() async {
-    // For mock data, skip actual file loading
+  Future<void> _loadAndPlayCurrentChunk({Duration seekTo = Duration.zero}) async {
     if (widget.versionId == 'mock_book_001_en') {
-      await _audio.load('mock'); // will succeed silently in test or prod
+      await _audio.load('mock');
       await _audio.play();
       return;
     }
-
     try {
-      final state = ref.read(playerProvider);
-      final line = state.currentScriptChunk;
-      if (line == null) return;
-
-      final fileName = 'chunk_${line.index.toString().padLeft(3, '0')}.wav';
-
-      // Fetch version for audioDir
-      final version =
-          await AppDatabase.instance.getAudioVersion(widget.versionId);
+      final playerState = ref.read(playerProvider);
+      final chunk = playerState.currentScriptChunk;
+      if (chunk == null) return;
+      final fileName = 'chunk_${chunk.index.toString().padLeft(3, '0')}.wav';
+      final version = await AppDatabase.instance.getAudioVersion(widget.versionId);
       if (version == null) return;
-
-      final filePath = '${version.audioDir}/$fileName';
-      await _audio.load(filePath);
+      await _audio.load('${version.audioDir}/$fileName');
+      if (seekTo != Duration.zero) await _audio.seek(seekTo);
       await _audio.play();
     } catch (e) {
-      // Missing/corrupt audio file — stop playback gracefully
       debugPrint('AudioService.load failed: $e');
     }
   }
 
-  void _saveProgress(int line) {
-    AppDatabase.instance.updateLastPlayedLine(widget.versionId, line);
+  void _seekToMs(double targetMs) {
+    final playerState = ref.read(playerProvider);
+    final notifier = ref.read(playerProvider.notifier);
+    final ready = playerState.readyChunks;
+    int cumulative = 0;
+    for (int i = 0; i < ready.length; i++) {
+      final chunkEnd = cumulative + ready[i].durationMs;
+      if (targetMs <= chunkEnd || i == ready.length - 1) {
+        final offset = (targetMs - cumulative).round().clamp(0, ready[i].durationMs);
+        notifier.goToChunk(i);
+        _loadAndPlayCurrentChunk(seekTo: Duration(milliseconds: offset));
+        break;
+      }
+      cumulative = chunkEnd;
+    }
+  }
+
+  void _saveProgress(int chunkIndex) {
+    AppDatabase.instance.updateLastPlayedLine(widget.versionId, chunkIndex);
   }
 
   @override
   void dispose() {
     _completionSub?.cancel();
+    _positionSub?.cancel();
     _audio.dispose();
     super.dispose();
   }
@@ -128,29 +132,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Widget build(BuildContext context) {
     final versionAsync = ref.watch(singleVersionProvider(widget.versionId));
     final playerState = ref.watch(playerProvider);
-
-    // For the mock version, the DB returns null — show the player UI anyway
-    // using script data already loaded into playerProvider.
     final isMock = widget.versionId == 'mock_book_001_en';
 
     return versionAsync.when(
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) =>
-          Scaffold(body: Center(child: Text('Error: $e'))),
+      error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
       data: (version) {
-        // For mock, version will be null but we still want to show the player
         if (version == null && !isMock) {
-          return const Scaffold(
-              body: Center(child: Text('Version not found')));
+          return const Scaffold(body: Center(child: Text('Version not found')));
         }
 
-        final line = playerState.currentScriptChunk;
-        final readyLines = playerState.readyChunks;
-
-        // Determine display language: use DB value or fall back to mock label
-        final displayLanguage =
-            version?.language.toUpperCase() ?? 'MOCK';
+        final chunk = playerState.currentScriptChunk;
+        final totalDurationMs = playerState.totalDurationMs;
+        final displayLanguage = version?.language.toUpperCase() ?? 'MOCK';
 
         return Scaffold(
           appBar: AppBar(
@@ -182,49 +177,64 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                // Page image placeholder (Phase 3 will show real page images)
+                // Scrollable dialogue transcript
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Chunk ${(line?.index ?? 0) + 1}',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      chunk?.text ?? '',
+                      style: Theme.of(context).textTheme.bodyLarge,
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                if (line != null)
-                  KaraokeText(
-                    text: line.text,
-                    character: line.speakers.join(', '),
-                    isPlaying: playerState.isPlaying,
-                  ),
-                const SizedBox(height: 24),
-                AudioControls(
-                  isPlaying: playerState.isPlaying,
-                  currentLine: playerState.currentChunkIndex,
-                  totalLines: readyLines.length,
-                  onPlay: () {
-                    ref.read(playerProvider.notifier).play();
-                    _audio.play();
-                  },
-                  onPause: () {
-                    ref.read(playerProvider.notifier).pause();
-                    _audio.pause();
-                  },
-                  onNext: () {
-                    ref.read(playerProvider.notifier).nextChunk();
-                    _saveProgress(playerState.currentChunkIndex + 1);
-                    _loadAndPlayCurrentLine();
-                  },
-                  onPrev: () =>
-                      ref.read(playerProvider.notifier).prevChunk(),
-                  onRestart: _restartFromBeginning,
+                const SizedBox(height: 12),
+                // Seekable timeline
+                Slider(
+                  value: _sliderPositionMs.clamp(0, totalDurationMs.toDouble()),
+                  max: totalDurationMs > 0 ? totalDurationMs.toDouble() : 1,
+                  onChanged: (v) => setState(() => _sliderPositionMs = v),
+                  onChangeEnd: _seekToMs,
+                ),
+                // Playback controls
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.skip_previous),
+                      onPressed: () {
+                        ref.read(playerProvider.notifier).prevChunk();
+                        _loadAndPlayCurrentChunk();
+                      },
+                    ),
+                    IconButton(
+                      icon: Icon(playerState.isPlaying ? Icons.pause : Icons.play_arrow),
+                      iconSize: 48,
+                      onPressed: () {
+                        if (playerState.isPlaying) {
+                          ref.read(playerProvider.notifier).pause();
+                          _audio.pause();
+                        } else {
+                          ref.read(playerProvider.notifier).play();
+                          _audio.play();
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.skip_next),
+                      onPressed: () {
+                        ref.read(playerProvider.notifier).nextChunk();
+                        _saveProgress(playerState.currentChunkIndex + 1);
+                        _loadAndPlayCurrentChunk();
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.replay),
+                      onPressed: () async {
+                        await _audio.stop();
+                        ref.read(playerProvider.notifier).goToChunk(0);
+                        _loadAndPlayCurrentChunk();
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
