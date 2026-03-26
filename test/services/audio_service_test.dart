@@ -5,7 +5,10 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:audioplayers_platform_interface/audioplayers_platform_interface.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:bookactor/services/audio_service.dart';
+
+class MockAudioPlayer extends Mock implements AudioPlayer {}
 
 // ──────────────────────────────────────────────────
 // Minimal fake implementations of the audioplayers
@@ -130,6 +133,10 @@ void main() {
   // Install fake platform implementations before any AudioPlayer is created.
   GlobalAudioplayersPlatformInterface.instance = _FakeGlobalPlatform();
 
+  setUpAll(() {
+    registerFallbackValue(Duration.zero);
+  });
+
   setUp(() {
     AudioplayersPlatformInterface.instance = _FakePlayerPlatform();
   });
@@ -168,5 +175,34 @@ void main() {
     await completer.future.timeout(const Duration(seconds: 1));
     await sub.cancel();
     service.dispose();
+  });
+
+  test('seek delegates to audioplayers', () async {
+    final mockPlayer = MockAudioPlayer();
+    final controller = StreamController<void>.broadcast();
+    when(() => mockPlayer.onPlayerComplete).thenAnswer((_) => controller.stream);
+    when(() => mockPlayer.seek(any())).thenAnswer((_) async {});
+    when(() => mockPlayer.dispose()).thenAnswer((_) async {});
+    final service = AudioService.withPlayer(mockPlayer);
+    await service.seek(const Duration(seconds: 5));
+    verify(() => mockPlayer.seek(const Duration(seconds: 5))).called(1);
+    await controller.close();
+    service.dispose();
+  });
+
+  test('positionStream exposes player onPositionChanged', () {
+    final mockPlayer = MockAudioPlayer();
+    final completeController = StreamController<void>.broadcast();
+    final positionController = StreamController<Duration>.broadcast();
+    when(() => mockPlayer.onPlayerComplete)
+        .thenAnswer((_) => completeController.stream);
+    when(() => mockPlayer.onPositionChanged)
+        .thenAnswer((_) => positionController.stream);
+    final service = AudioService.withPlayer(mockPlayer);
+    expect(service.positionStream,
+        emitsInOrder([const Duration(seconds: 1)]));
+    positionController.add(const Duration(seconds: 1));
+    positionController.close();
+    completeController.close();
   });
 }
