@@ -22,6 +22,67 @@ _OPENAI_TO_GEMINI = {
     "onyx": "Kore", "nova": "Puck", "shimmer": "Zephyr",
 }
 
+# Gender classification for Gemini voices (used when collapsing 3+ speakers to 2).
+_FEMALE_VOICES = {"Aoede", "Kore", "Zephyr", "Leda"}
+
+
+def _collapse_to_two_speakers(text: str, voice_map: dict[str, str]) -> tuple[str, dict[str, str]]:
+    """Collapse 3+ speakers to exactly 2 for Gemini multi-speaker API.
+
+    Groups characters by voice gender: narrator's gender group vs contrasting group.
+    All same-gender-as-narrator characters are merged under the narrator's speaker
+    label. All contrasting-gender characters share the first contrasting speaker label.
+    Narrator's voice and name are never changed.
+    """
+    narrator_name = next(
+        (name for name in voice_map if name.lower() == "narrator"),
+        list(voice_map.keys())[0],
+    )
+    narrator_voice = voice_map[narrator_name]
+    narrator_is_female = narrator_voice in _FEMALE_VOICES
+
+    same_group: list[str] = [narrator_name]
+    contrast_group: list[str] = []
+    contrast_voice: str | None = None
+
+    for name, voice in voice_map.items():
+        if name == narrator_name:
+            continue
+        if (voice in _FEMALE_VOICES) == narrator_is_female:
+            same_group.append(name)
+        else:
+            contrast_group.append(name)
+            if contrast_voice is None:
+                contrast_voice = voice
+
+    if not contrast_group:
+        # All same gender — treat first non-narrator as the contrast speaker.
+        for name, voice in voice_map.items():
+            if name != narrator_name:
+                contrast_group.append(name)
+                contrast_voice = voice
+                break
+        same_group = [narrator_name]
+
+    contrast_name = contrast_group[0]
+    new_voice_map = {narrator_name: narrator_voice, contrast_name: contrast_voice}
+
+    lines = []
+    for line in text.strip().split("\n"):
+        if ": " not in line:
+            lines.append(line)
+            continue
+        name, utterance = line.split(": ", 1)
+        name = name.strip()
+        if name in same_group and name != narrator_name:
+            lines.append(f"{narrator_name}: {utterance}")
+        elif name not in new_voice_map:
+            lines.append(f"{contrast_name}: {utterance}")
+        else:
+            lines.append(line)
+
+    return "\n".join(lines), new_voice_map
+
 
 def _pcm_to_wav(pcm_bytes: bytes) -> bytes:
     """Wrap raw 24 kHz 16-bit mono PCM in a WAV container."""
@@ -106,14 +167,23 @@ async def _generate_chunk_openai(client: AsyncOpenAI, chunk: dict) -> dict:
 
 
 async def _generate_chunk_gemini(client, chunk: dict) -> dict:
-    """Generate audio for a chunk using Gemini TTS (multi-speaker when exactly 2 voices)."""
+    """Generate audio for a chunk using Gemini TTS.
+
+    - 1 speaker  → single-speaker VoiceConfig
+    - 2 speakers → MultiSpeakerVoiceConfig as-is
+    - 3+ speakers → collapse to 2 by gender grouping, then MultiSpeakerVoiceConfig
+    """
     try:
         voice_map = {
             name: _OPENAI_TO_GEMINI.get(v.lower(), v)
             for name, v in chunk["voice_map"].items()
         }
 
-        if len(voice_map) == 2:
+        text = chunk["text"]
+        if len(voice_map) > 2:
+            text, voice_map = _collapse_to_two_speakers(text, voice_map)
+
+        if len(voice_map) >= 2:
             speech_config = types.SpeechConfig(
                 multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
                     speaker_voice_configs=[
@@ -138,7 +208,7 @@ async def _generate_chunk_gemini(client, chunk: dict) -> dict:
         response = await asyncio.to_thread(
             client.models.generate_content,
             model="gemini-2.5-pro-preview-tts",
-            contents=chunk["text"],
+            contents=text,
             config=types.GenerateContentConfig(
                 response_modalities=["AUDIO"],
                 speech_config=speech_config,

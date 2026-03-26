@@ -188,6 +188,47 @@ class TestGenerateChunkGemini:
         assert result["status"] == "ready"
 
 
+class TestCollapseToTwoSpeakers:
+    def test_narrator_and_one_male_kept_as_is(self):
+        from backend.services.tts_service import _collapse_to_two_speakers
+        text = "Narrator: Hi.\nBear: Hello.\nRabbit: Bye."
+        voice_map = {"Narrator": "Aoede", "Bear": "Charon", "Rabbit": "Puck"}
+        new_text, new_map = _collapse_to_two_speakers(text, voice_map)
+        assert set(new_map.keys()) == {"Narrator", "Bear"}
+        assert new_map["Narrator"] == "Aoede"
+        # Rabbit (male) merged into Bear's speaker label
+        assert "Rabbit:" not in new_text
+        assert new_text.count("Bear:") == 2
+
+    def test_same_gender_as_narrator_merged_under_narrator(self):
+        from backend.services.tts_service import _collapse_to_two_speakers
+        # Narrator=Aoede(F), Mother=Kore(F) → same gender → merged under Narrator
+        # Bear=Charon(M) → contrast
+        text = "Narrator: Once.\nMother: Good morning.\nBear: Growl."
+        voice_map = {"Narrator": "Aoede", "Mother": "Kore", "Bear": "Charon"}
+        new_text, new_map = _collapse_to_two_speakers(text, voice_map)
+        assert set(new_map.keys()) == {"Narrator", "Bear"}
+        assert "Mother:" not in new_text
+        # Mother's line now attributed to Narrator
+        assert new_text.count("Narrator:") == 2
+
+    def test_all_same_gender_uses_first_non_narrator_as_contrast(self):
+        from backend.services.tts_service import _collapse_to_two_speakers
+        # All female voices — no contrasting gender
+        text = "Narrator: A.\nAlice: B.\nBeth: C."
+        voice_map = {"Narrator": "Aoede", "Alice": "Kore", "Beth": "Zephyr"}
+        new_text, new_map = _collapse_to_two_speakers(text, voice_map)
+        assert len(new_map) == 2
+        assert "Narrator" in new_map
+
+    def test_narrator_voice_never_changes(self):
+        from backend.services.tts_service import _collapse_to_two_speakers
+        text = "Narrator: A.\nBear: B.\nRabbit: C."
+        voice_map = {"Narrator": "Fenrir", "Bear": "Charon", "Rabbit": "Puck"}
+        _, new_map = _collapse_to_two_speakers(text, voice_map)
+        assert new_map["Narrator"] == "Fenrir"
+
+
 class TestParseChunkSegments:
     def test_parses_two_speakers(self):
         from backend.services.tts_service import _parse_chunk_segments
