@@ -34,23 +34,32 @@ class _RecordingApiService extends ApiService {
     required List<Map<String, dynamic>> vlmOutput,
     required String language,
     required String llmProvider,
+    String ttsProvider = 'openai',
   }) async {
     calls.add('script');
     return {
       'characters': [{'name': 'Narrator', 'voice': 'alloy'}],
-      'lines': [
-        {'index': 0, 'character': 'Narrator', 'text': 'Hi', 'page': 1, 'status': 'pending'}
+      'chunks': [
+        {
+          'index': 0,
+          'speakers': ['Narrator'],
+          'text': 'Hi',
+          'duration_ms': 0,
+          'status': 'pending',
+        }
       ],
     };
   }
 
   @override
   Future<List<Map<String, dynamic>>> generateAudio({
-    required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> chunks,
     String ttsProvider = 'openai',
   }) async {
     calls.add('tts');
-    return [{'index': 0, 'status': 'ready', 'audio_b64': base64Encode([1, 2, 3])}];
+    return [
+      {'index': 0, 'status': 'ready', 'audio_b64': base64Encode([1, 2, 3]), 'duration_ms': 1200}
+    ];
   }
 }
 
@@ -108,7 +117,6 @@ void main() {
       ttsProvider: 'openai',
       processingMode: ProcessingMode.textHeavy,
       isNewBook: true,
-      lastGeneratedLine: -1,
       audioDirOverride: tempAudioDir.path,
     );
 
@@ -165,7 +173,6 @@ void main() {
       ttsProvider: 'openai',
       processingMode: ProcessingMode.textHeavy,
       isNewBook: true,
-      lastGeneratedLine: -1,
       audioDirOverride: tempAudioDir.path,
     );
 

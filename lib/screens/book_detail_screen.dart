@@ -279,7 +279,6 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                     // Required field; textHeavy satisfies the constructor.
                     processingMode: ProcessingMode.textHeavy,
                     isNewBook: false,
-                    lastGeneratedLine: -1,
                   ),
                 );
               },

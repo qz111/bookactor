@@ -197,7 +197,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           ttsProvider: _ttsProvider,
           processingMode: _processingMode!,
           isNewBook: true,
-          lastGeneratedLine: -1,
           imageFilePaths: isMultiImage ? _imagePaths : null,
         ),
       );

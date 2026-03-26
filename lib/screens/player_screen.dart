@@ -60,7 +60,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (!mounted) return;
     ref
         .read(playerProvider.notifier)
-        .loadScript(script, startLine: startLine);
+        .loadScript(script, startChunk: startLine);
 
     // Begin playback of the first (or resumed) line automatically
     await _loadAndPlayCurrentLine();
@@ -70,17 +70,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (!mounted) return;
     final notifier = ref.read(playerProvider.notifier);
     // Stop at the last line instead of repeating it
-    if (notifier.isAtLastLine) {
+    if (notifier.isAtLastChunk) {
       notifier.pause();
       return;
     }
-    notifier.nextLine();
+    notifier.nextChunk();
     _loadAndPlayCurrentLine();
   }
 
   Future<void> _restartFromBeginning() async {
     await _audio.stop();
-    ref.read(playerProvider.notifier).goToLine(0);
+    ref.read(playerProvider.notifier).goToChunk(0);
     await _loadAndPlayCurrentLine();
   }
 
@@ -94,10 +94,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
     try {
       final state = ref.read(playerProvider);
-      final line = state.currentScriptLine;
+      final line = state.currentScriptChunk;
       if (line == null) return;
 
-      final fileName = 'line_${line.index.toString().padLeft(3, '0')}.mp3';
+      final fileName = 'chunk_${line.index.toString().padLeft(3, '0')}.wav';
 
       // Fetch version for audioDir
       final version =
@@ -145,11 +145,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               body: Center(child: Text('Version not found')));
         }
 
-        final line = playerState.currentScriptLine;
-        final readyLines = playerState.script?.lines
-                .where((l) => l.status == 'ready')
-                .toList() ??
-            [];
+        final line = playerState.currentScriptChunk;
+        final readyLines = playerState.readyChunks;
 
         // Determine display language: use DB value or fall back to mock label
         final displayLanguage =
@@ -194,7 +191,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        'Page ${line?.page ?? 1}',
+                        'Chunk ${(line?.index ?? 0) + 1}',
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                     ),
@@ -204,13 +201,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 if (line != null)
                   KaraokeText(
                     text: line.text,
-                    character: line.character,
+                    character: line.speakers.join(', '),
                     isPlaying: playerState.isPlaying,
                   ),
                 const SizedBox(height: 24),
                 AudioControls(
                   isPlaying: playerState.isPlaying,
-                  currentLine: playerState.currentLine,
+                  currentLine: playerState.currentChunkIndex,
                   totalLines: readyLines.length,
                   onPlay: () {
                     ref.read(playerProvider.notifier).play();
@@ -221,12 +218,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     _audio.pause();
                   },
                   onNext: () {
-                    ref.read(playerProvider.notifier).nextLine();
-                    _saveProgress(playerState.currentLine + 1);
+                    ref.read(playerProvider.notifier).nextChunk();
+                    _saveProgress(playerState.currentChunkIndex + 1);
                     _loadAndPlayCurrentLine();
                   },
                   onPrev: () =>
-                      ref.read(playerProvider.notifier).prevLine(),
+                      ref.read(playerProvider.notifier).prevChunk(),
                   onRestart: _restartFromBeginning,
                 ),
               ],

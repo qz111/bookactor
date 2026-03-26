@@ -10,6 +10,7 @@ import '../db/database.dart';
 import '../providers/settings_provider.dart';
 import '../models/audio_version.dart';
 import '../models/processing_mode.dart';
+import '../models/script.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 
@@ -24,7 +25,6 @@ class LoadingParams {
   final String ttsProvider;
   final ProcessingMode processingMode;
   final bool isNewBook;
-  final int lastGeneratedLine;
   /// Optional override for the audio output directory (useful in tests).
   final String? audioDirOverride;
   /// Optional list of image paths for multi-image mode.
@@ -41,7 +41,6 @@ class LoadingParams {
     required this.ttsProvider,
     required this.processingMode,
     required this.isNewBook,
-    required this.lastGeneratedLine,
     this.audioDirOverride,
     this.imageFilePaths,
   });
@@ -169,59 +168,57 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
       await Directory(audioDir).create(recursive: true);
       if (!mounted) return;
 
-      final characters =
-          List<Map<String, dynamic>>.from(scriptMap['characters'] as List);
-      final lines =
-          List<Map<String, dynamic>>.from(scriptMap['lines'] as List);
-      final pendingLines = lines
-          .where((l) =>
-              l['status'] == 'pending' &&
-              (l['index'] as int) > p.lastGeneratedLine)
-          .map((l) {
-            final charName = l['character'] as String;
-            final defaultVoice =
-                p.ttsProvider == 'gemini' ? 'Aoede' : 'alloy';
-            final voice = characters.firstWhere(
-              (c) => c['name'] == charName,
-              orElse: () => {'voice': defaultVoice},
-            )['voice'] as String;
+      final script = Script.fromJson(jsonEncode(scriptMap));
+      final allChunks =
+          List<Map<String, dynamic>>.from(scriptMap['chunks'] as List);
+
+      final pendingChunks = allChunks
+          .where((c) => c['status'] == 'pending')
+          .map((c) {
+            final speakers = List<String>.from(c['speakers'] as List);
+            final voiceMap = {for (final s in speakers) s: script.voiceFor(s)};
             return {
-              'index': l['index'],
-              'text': l['text'],
-              'voice': voice,
+              'index': c['index'],
+              'text': c['text'],
+              'voice_map': voiceMap,
             };
           })
           .toList();
 
       final audioResults = await api.generateAudio(
-        chunks: pendingLines,
+        chunks: pendingChunks,
         ttsProvider: p.ttsProvider,
       );
-      final scriptLines = List<Map<String, dynamic>>.from(lines);
+      final scriptChunks = List<Map<String, dynamic>>.from(allChunks);
 
       for (final result in audioResults) {
         final idx = result['index'] as int;
-        final lineIdx = scriptLines.indexWhere((l) => l['index'] == idx);
-        if (lineIdx == -1) continue; // skip if index not found
+        final chunkIdx = scriptChunks.indexWhere((c) => c['index'] == idx);
+        if (chunkIdx == -1) continue;
+
         if (result['status'] == 'ready') {
           final audioBytes = base64Decode(result['audio_b64'] as String);
-          final fileName = 'line_${idx.toString().padLeft(3, '0')}.mp3';
+          final fileName = 'chunk_${idx.toString().padLeft(3, '0')}.wav';
           await File(path_pkg.join(audioDir, fileName)).writeAsBytes(audioBytes);
-          scriptLines[lineIdx] = {...scriptLines[lineIdx], 'status': 'ready'};
+          scriptChunks[chunkIdx] = {
+            ...scriptChunks[chunkIdx],
+            'status': 'ready',
+            'duration_ms': result['duration_ms'] as int,
+          };
         } else {
-          scriptLines[lineIdx] = {...scriptLines[lineIdx], 'status': 'error'};
+          scriptChunks[chunkIdx] = {
+            ...scriptChunks[chunkIdx],
+            'status': 'error',
+          };
         }
         await AppDatabase.instance.updateAudioVersionStatus(
           p.versionId, 'generating',
-          lastGeneratedLine: idx,
-          scriptJson: jsonEncode({...scriptMap, 'lines': scriptLines}),
+          scriptJson: jsonEncode({...scriptMap, 'chunks': scriptChunks}),
         );
       }
-      if (!mounted) return;
 
-      // Mark ready
-      final existing =
-          await AppDatabase.instance.getAudioVersion(p.versionId);
+      // Mark version as ready with audioDir persisted
+      final existing = await AppDatabase.instance.getAudioVersion(p.versionId);
       if (existing != null) {
         await AppDatabase.instance.insertAudioVersion(
           AudioVersion(
@@ -229,7 +226,7 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
             bookId: existing.bookId,
             language: existing.language,
             llmProvider: existing.llmProvider,
-            scriptJson: existing.scriptJson,
+            scriptJson: jsonEncode({...scriptMap, 'chunks': scriptChunks}),
             audioDir: audioDir,
             status: 'ready',
             lastGeneratedLine: existing.lastGeneratedLine,

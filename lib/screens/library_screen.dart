@@ -62,7 +62,6 @@ class LibraryScreen extends ConsumerWidget {
                             // Required field; textHeavy satisfies the constructor.
                             processingMode: ProcessingMode.textHeavy,
                             isNewBook: false,
-                            lastGeneratedLine: v.lastGeneratedLine,
                           ),
                         );
                       }

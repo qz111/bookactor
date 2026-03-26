@@ -143,7 +143,6 @@ void main() {
     final params = pushedExtra as LoadingParams;
     expect(params.bookId, 'detail_test_book');
     expect(params.isNewBook, false);
-    expect(params.lastGeneratedLine, -1);
   });
 
   testWidgets('long-press on ready version shows delete dialog', (tester) async {
