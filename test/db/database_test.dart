@@ -80,6 +80,47 @@ void main() {
       expect(updated!.vlmOutput, '[{"page":1,"text":"Hello"}]');
       await db.close();
     });
+
+    test('deleteBook removes the book row', () async {
+      await db.insertBook(testBook);
+
+      final before = await db.getBook('test123');
+      expect(before, isNotNull);
+
+      await db.deleteBook('test123');
+
+      final after = await db.getBook('test123');
+      expect(after, isNull);
+    });
+
+    test('deleteBook on missing id is a no-op', () async {
+      await expectLater(
+        db.deleteBook('nonexistent_id'),
+        completes,
+      );
+    });
+
+    test('deleteBook after deleteAudioVersion leaves no orphan rows', () async {
+      // Validates the intended usage order: delete versions first, then the book.
+      await db.insertBook(testBook);
+      await db.insertAudioVersion(const AudioVersion(
+        versionId: 'test123_en',
+        bookId: 'test123',
+        language: 'en',
+        scriptJson: '{}',
+        audioDir: '',
+        status: 'ready',
+        lastGeneratedLine: 0,
+        lastPlayedLine: 0,
+        createdAt: 1711065600,
+      ));
+
+      await db.deleteAudioVersion('test123_en');
+      await db.deleteBook('test123');
+
+      expect(await db.getBook('test123'), isNull);
+      expect(await db.getAudioVersion('test123_en'), isNull);
+    });
   });
 
   group('AudioVersions', () {

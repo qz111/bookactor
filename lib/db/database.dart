@@ -173,4 +173,9 @@ class AppDatabase {
     final db = await database;
     await db.delete('audio_versions', where: 'version_id = ?', whereArgs: [versionId]);
   }
+
+  Future<void> deleteBook(String bookId) async {
+    final db = await database;
+    await db.delete('books', where: 'book_id = ?', whereArgs: [bookId]);
+  }
 }
