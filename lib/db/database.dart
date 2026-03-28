@@ -174,6 +174,8 @@ class AppDatabase {
     await db.delete('audio_versions', where: 'version_id = ?', whereArgs: [versionId]);
   }
 
+  /// Deletes the book row. Callers must delete all child [audio_versions] rows
+  /// first — the schema FK has no ON DELETE CASCADE.
   Future<void> deleteBook(String bookId) async {
     final db = await database;
     await db.delete('books', where: 'book_id = ?', whereArgs: [bookId]);
