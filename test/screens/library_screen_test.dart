@@ -143,4 +143,32 @@ void main() {
     expect(find.byType(Image), findsOneWidget);
     expect(find.byIcon(Icons.menu_book), findsNothing);
   });
+
+  testWidgets('BookCard onLongPress callback is invoked on long press',
+      (tester) async {
+    bool longPressed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BookCard(
+            book: const Book(
+              bookId: 'b1',
+              title: 'Test',
+              coverPath: null,
+              pagesDir: '',
+              vlmOutput: '[]',
+              vlmProvider: 'gemini',
+              createdAt: 0,
+            ),
+            languageCount: 1,
+            onTap: () {},
+            onLongPress: () => longPressed = true,
+          ),
+        ),
+      ),
+    );
+    await tester.longPress(find.byType(BookCard));
+    await tester.pumpAndSettle();
+    expect(longPressed, isTrue);
+  });
 }

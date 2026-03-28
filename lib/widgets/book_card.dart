@@ -6,12 +6,14 @@ class BookCard extends StatelessWidget {
   final Book book;
   final int languageCount;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const BookCard({
     super.key,
     required this.book,
     required this.languageCount,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -20,6 +22,7 @@ class BookCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
