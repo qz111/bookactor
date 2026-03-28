@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:bookactor/models/audio_version.dart';
 import 'package:bookactor/models/book.dart';
 import 'package:bookactor/providers/books_provider.dart';
 import 'package:bookactor/screens/library_screen.dart';
@@ -170,5 +171,85 @@ void main() {
     await tester.longPress(find.byType(BookCard));
     await tester.pumpAndSettle();
     expect(longPressed, isTrue);
+  });
+
+  testWidgets('long-press on book card shows delete dialog', (tester) async {
+    final mockBooks = [
+      const Book(
+        bookId: 'b1',
+        title: 'The Very Hungry Caterpillar',
+        pagesDir: '',
+        vlmOutput: '[]',
+        vlmProvider: 'gemini',
+        createdAt: 1711065600,
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          booksProvider.overrideWith((_) async => mockBooks),
+          generatingVersionsProvider.overrideWith((_) async => []),
+          audioVersionsProvider('b1').overrideWith((_) async => []),
+        ],
+        child: const MaterialApp(home: LibraryScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('The Very Hungry Caterpillar'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Delete "The Very Hungry Caterpillar"?'),
+      findsOneWidget,
+    );
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+  });
+
+  // NOTE: This second test passes vacuously before implementation (long-press
+  // does nothing at all → no dialog). It becomes a meaningful regression guard
+  // after the feature is wired: confirms the generating guard blocks the dialog.
+  testWidgets(
+      'long-press on book card is disabled when a version is generating',
+      (tester) async {
+    final mockBooks = [
+      const Book(
+        bookId: 'b1',
+        title: 'The Very Hungry Caterpillar',
+        pagesDir: '',
+        vlmOutput: '[]',
+        vlmProvider: 'gemini',
+        createdAt: 1711065600,
+      ),
+    ];
+    const generatingVersion = AudioVersion(
+      versionId: 'b1_en',
+      bookId: 'b1',
+      language: 'en',
+      scriptJson: '{}',
+      audioDir: '',
+      status: 'generating',
+      lastGeneratedLine: 0,
+      lastPlayedLine: 0,
+      createdAt: 1711065600,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          booksProvider.overrideWith((_) async => mockBooks),
+          generatingVersionsProvider.overrideWith((_) async => []),
+          audioVersionsProvider('b1')
+              .overrideWith((_) async => [generatingVersion]),
+        ],
+        child: const MaterialApp(home: LibraryScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('The Very Hungry Caterpillar'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
   });
 }

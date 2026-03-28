@@ -1,17 +1,118 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../db/database.dart';
+import '../models/audio_version.dart';
+import '../models/book.dart';
 import '../models/processing_mode.dart';
 import '../providers/books_provider.dart';
 import '../screens/loading_screen.dart';
 import '../widgets/book_card.dart';
 
-class LibraryScreen extends ConsumerWidget {
+class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  void _confirmDeleteBook(BuildContext screenContext, Book book) {
+    showDialog(
+      context: screenContext,
+      builder: (dialogContext) {
+        bool deleting = false;
+        return StatefulBuilder(
+          builder: (_, setDialogState) => AlertDialog(
+            title: Text('Delete "${book.title}"?'),
+            content: const Text(
+              'This will permanently delete the book and all its audio versions. This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    deleting ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: deleting
+                    ? null
+                    : () async {
+                        setDialogState(() => deleting = true);
+                        bool success = false;
+                        try {
+                          final versions = await AppDatabase.instance
+                              .getVersionsForBook(book.bookId);
+                          for (final v in versions) {
+                            if (v.audioDir.isNotEmpty) {
+                              try {
+                                await Directory(v.audioDir)
+                                    .delete(recursive: true);
+                              } on FileSystemException {
+                                // already gone — continue
+                              }
+                            }
+                          }
+                          if (book.pagesDir.isNotEmpty) {
+                            try {
+                              await Directory(book.pagesDir)
+                                  .delete(recursive: true);
+                            } on FileSystemException {
+                              // already gone
+                            }
+                          }
+                          if (book.coverPath != null &&
+                              book.coverPath!.isNotEmpty) {
+                            try {
+                              await File(book.coverPath!).delete();
+                            } on FileSystemException {
+                              // already gone
+                            }
+                          }
+                          for (final v in versions) {
+                            await AppDatabase.instance
+                                .deleteAudioVersion(v.versionId);
+                          }
+                          await AppDatabase.instance.deleteBook(book.bookId);
+                          success = true;
+                        } finally {
+                          if (!success && mounted) {
+                            setDialogState(() => deleting = false);
+                          }
+                        }
+                        if (success && mounted) {
+                          ref.invalidate(booksProvider);
+                          ref.invalidate(audioVersionsProvider(book.bookId));
+                          Navigator.pop(dialogContext);
+                        } else if (!success && mounted) {
+                          ScaffoldMessenger.of(screenContext).showSnackBar(
+                            const SnackBar(
+                                content: Text('Could not delete book.')),
+                          );
+                        }
+                      },
+                child: deleting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child:
+                            CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Capture scaffold context before any nested Consumer closures to avoid
+    // the inner Consumer builder's `context` parameter shadowing this one.
+    final screenContext = context;
     final booksAsync = ref.watch(booksProvider);
     final generatingAsync = ref.watch(generatingVersionsProvider);
 
@@ -58,8 +159,6 @@ class LibraryScreen extends ConsumerWidget {
                             vlmProvider: book.vlmProvider,
                             llmProvider: v.llmProvider ?? 'gpt4o',
                             ttsProvider: v.ttsProvider ?? 'openai',
-                            // processingMode is not used on resume (isNewBook: false skips analyzePages).
-                            // Required field; textHeavy satisfies the constructor.
                             processingMode: ProcessingMode.textHeavy,
                             isNewBook: false,
                           ),
@@ -111,11 +210,17 @@ class LibraryScreen extends ConsumerWidget {
                       builder: (context, ref, _) {
                         final versionsAsync =
                             ref.watch(audioVersionsProvider(book.bookId));
+                        final versions = versionsAsync.value ?? [];
+                        final isGenerating =
+                            versions.any((v) => v.status == 'generating');
                         return BookCard(
                           book: book,
-                          languageCount: versionsAsync.value?.length ?? 0,
+                          languageCount: versions.length,
                           onTap: () =>
                               context.push('/book/${book.bookId}'),
+                          onLongPress: isGenerating
+                              ? () {}
+                              : () => _confirmDeleteBook(screenContext, book),
                         );
                       },
                     );
