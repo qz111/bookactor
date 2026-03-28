@@ -14,6 +14,8 @@ import '../models/script.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 
+enum ResumeStage { vlm, llm, tts }
+
 /// Parameters passed to LoadingScreen via GoRouter's extra field.
 class LoadingParams {
   final String bookId;
@@ -30,6 +32,9 @@ class LoadingParams {
   /// Optional list of image paths for multi-image mode.
   /// When non-null and non-empty, these files are read in order instead of [filePath].
   final List<String>? imageFilePaths;
+  /// When non-null, the pipeline skips stages before this stage.
+  /// null = run all stages from the beginning.
+  final ResumeStage? startStage;
 
   const LoadingParams({
     required this.bookId,
@@ -43,6 +48,7 @@ class LoadingParams {
     required this.isNewBook,
     this.audioDirOverride,
     this.imageFilePaths,
+    this.startStage,
   });
 }
 

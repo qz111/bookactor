@@ -203,4 +203,29 @@ void main() {
     expect(fakeApi.calls, equals(['analyze', 'script', 'tts']));
     expect(fakeApi.analyzeCalls.single.length, equals(2));
   });
+
+  group('LoadingParams.startStage', () {
+    test('defaults to null', () {
+      const p = LoadingParams(
+        bookId: 'b', versionId: 'v', filePath: '', language: 'en',
+        vlmProvider: 'gemini', llmProvider: 'gpt4o', ttsProvider: 'openai',
+        processingMode: ProcessingMode.textHeavy, isNewBook: false,
+      );
+      expect(p.startStage, isNull);
+    });
+
+    test('accepts explicit ResumeStage.tts', () {
+      const p = LoadingParams(
+        bookId: 'b', versionId: 'v', filePath: '', language: 'en',
+        vlmProvider: 'gemini', llmProvider: 'gpt4o', ttsProvider: 'openai',
+        processingMode: ProcessingMode.textHeavy, isNewBook: false,
+        startStage: ResumeStage.tts,
+      );
+      expect(p.startStage, ResumeStage.tts);
+    });
+
+    test('ResumeStage enum has vlm, llm, tts values', () {
+      expect(ResumeStage.values, containsAll([ResumeStage.vlm, ResumeStage.llm, ResumeStage.tts]));
+    });
+  });
 }
