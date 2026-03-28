@@ -100,8 +100,7 @@ void main() {
       );
     });
 
-    test('deleteBook after deleteAudioVersion leaves no orphan rows', () async {
-      // Validates the intended usage order: delete versions first, then the book.
+    test('deleteBook and deleteAudioVersion each remove their respective rows', () async {
       await db.insertBook(testBook);
       await db.insertAudioVersion(const AudioVersion(
         versionId: 'test123_en',
