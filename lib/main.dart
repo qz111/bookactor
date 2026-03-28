@@ -23,6 +23,7 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
   await _seedMockData();
+  await AppDatabase.instance.resetGeneratingVersions();
 
   // Determine initial route before building the widget tree.
   // SettingsService() is constructed once here — safe because flutter_secure_storage

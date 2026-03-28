@@ -169,6 +169,20 @@ class AppDatabase {
     return rows.map(AudioVersion.fromMap).toList();
   }
 
+  /// Resets all versions with status='generating' to status='error'.
+  /// Called on cold start to surface interrupted runs as recoverable errors.
+  /// Does NOT modify scriptJson — per-chunk statuses are intentionally preserved
+  /// so TTS resume can skip already-completed chunks.
+  Future<void> resetGeneratingVersions() async {
+    final db = await database;
+    await db.update(
+      'audio_versions',
+      {'status': 'error'},
+      where: 'status = ?',
+      whereArgs: ['generating'],
+    );
+  }
+
   Future<void> deleteAudioVersion(String versionId) async {
     final db = await database;
     await db.delete('audio_versions', where: 'version_id = ?', whereArgs: [versionId]);

@@ -207,5 +207,39 @@ void main() {
         completes,
       );
     });
+
+    test('resetGeneratingVersions flips generating to error, preserves scriptJson', () async {
+      await db.insertAudioVersion(const AudioVersion(
+        versionId: 'test123_en',
+        bookId: 'test123',
+        language: 'en',
+        scriptJson: '{"chunks":[{"index":0,"status":"ready"}]}',
+        audioDir: '',
+        status: 'generating',
+        lastGeneratedLine: 2,
+        lastPlayedLine: 0,
+        createdAt: 0,
+      ));
+      await db.insertAudioVersion(const AudioVersion(
+        versionId: 'test123_fr',
+        bookId: 'test123',
+        language: 'fr',
+        scriptJson: '{}',
+        audioDir: '',
+        status: 'ready',
+        lastGeneratedLine: 0,
+        lastPlayedLine: 0,
+        createdAt: 0,
+      ));
+
+      await db.resetGeneratingVersions();
+
+      final en = await db.getAudioVersion('test123_en');
+      final fr = await db.getAudioVersion('test123_fr');
+      expect(en!.status, 'error');   // generating → error
+      expect(fr!.status, 'ready');   // ready → unchanged
+      // scriptJson preserved — per-chunk statuses survive the reset
+      expect(en.scriptJson, '{"chunks":[{"index":0,"status":"ready"}]}');
+    });
   });
 }
