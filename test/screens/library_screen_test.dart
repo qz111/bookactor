@@ -207,9 +207,6 @@ void main() {
     expect(find.text('Cancel'), findsOneWidget);
   });
 
-  // NOTE: This second test passes vacuously before implementation (long-press
-  // does nothing at all → no dialog). It becomes a meaningful regression guard
-  // after the feature is wired: confirms the generating guard blocks the dialog.
   testWidgets(
       'long-press on book card is disabled when a version is generating',
       (tester) async {

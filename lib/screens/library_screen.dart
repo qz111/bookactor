@@ -219,6 +219,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           onTap: () =>
                               context.push('/book/${book.bookId}'),
                           onLongPress: isGenerating
+                              // () {} instead of null: null leaves LongPressGestureRecognizer
+                              // unregistered so pointer-up after a long hold still fires onTap.
                               ? () {}
                               : () => _confirmDeleteBook(screenContext, book),
                         );
