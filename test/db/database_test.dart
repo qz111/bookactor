@@ -210,8 +210,8 @@ void main() {
 
     test('resetGeneratingVersions flips generating to error, preserves scriptJson', () async {
       await db.insertAudioVersion(const AudioVersion(
-        versionId: 'test123_en',
-        bookId: 'test123',
+        versionId: 'reset_gen_en',
+        bookId: 'reset_gen',
         language: 'en',
         scriptJson: '{"chunks":[{"index":0,"status":"ready"}]}',
         audioDir: '',
@@ -221,8 +221,8 @@ void main() {
         createdAt: 0,
       ));
       await db.insertAudioVersion(const AudioVersion(
-        versionId: 'test123_fr',
-        bookId: 'test123',
+        versionId: 'reset_gen_fr',
+        bookId: 'reset_gen',
         language: 'fr',
         scriptJson: '{}',
         audioDir: '',
@@ -234,12 +234,16 @@ void main() {
 
       await db.resetGeneratingVersions();
 
-      final en = await db.getAudioVersion('test123_en');
-      final fr = await db.getAudioVersion('test123_fr');
+      final en = await db.getAudioVersion('reset_gen_en');
+      final fr = await db.getAudioVersion('reset_gen_fr');
       expect(en!.status, 'error');   // generating → error
       expect(fr!.status, 'ready');   // ready → unchanged
       // scriptJson preserved — per-chunk statuses survive the reset
       expect(en.scriptJson, '{"chunks":[{"index":0,"status":"ready"}]}');
+    });
+
+    test('resetGeneratingVersions is a no-op on empty table', () async {
+      await expectLater(db.resetGeneratingVersions(), completes);
     });
   });
 }
