@@ -12,11 +12,6 @@ final audioVersionsProvider =
   return AppDatabase.instance.getVersionsForBook(bookId);
 });
 
-final generatingVersionsProvider =
-    FutureProvider<List<AudioVersion>>((ref) async {
-  return AppDatabase.instance.getGeneratingVersions();
-});
-
 final singleBookProvider =
     FutureProvider.family<Book?, String>((ref, bookId) async {
   return AppDatabase.instance.getBook(bookId);

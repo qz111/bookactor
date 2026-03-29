@@ -168,25 +168,6 @@ void main() {
       expect(updated?.scriptJson, '{"updated":true}');
     });
 
-    test('getGeneratingVersions returns only generating rows', () async {
-      const generatingVersion = AudioVersion(
-        versionId: 'test123_zh',
-        bookId: 'test123',
-        language: 'zh',
-        scriptJson: '{}',
-        audioDir: '',
-        status: 'generating',
-        lastGeneratedLine: 2,
-        lastPlayedLine: 0,
-        createdAt: 1711065600,
-      );
-      await db.insertAudioVersion(testVersion);
-      await db.insertAudioVersion(generatingVersion);
-      final generating = await db.getGeneratingVersions();
-      expect(generating.length, 1);
-      expect(generating[0].language, 'zh');
-    });
-
     test('deleteAudioVersion removes the row', () async {
       await db.insertAudioVersion(testVersion);
 

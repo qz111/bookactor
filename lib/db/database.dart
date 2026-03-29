@@ -160,15 +160,6 @@ class AppDatabase {
         where: 'version_id = ?', whereArgs: [versionId]);
   }
 
-  /// Returns all versions with status='generating'. Used on cold start
-  /// to prompt the user to resume interrupted generation.
-  Future<List<AudioVersion>> getGeneratingVersions() async {
-    final db = await database;
-    final rows = await db.query('audio_versions',
-        where: 'status = ?', whereArgs: ['generating']);
-    return rows.map(AudioVersion.fromMap).toList();
-  }
-
   /// Resets all versions with status='generating' to status='error'.
   /// Called on cold start to surface interrupted runs as recoverable errors.
   /// Does NOT modify scriptJson — per-chunk statuses are intentionally preserved
