@@ -182,6 +182,159 @@ void main() {
     expect(find.text('Cancel'), findsOneWidget);
   });
 
+  group('inferResumeStage', () {
+    const bookNoVlm = Book(
+      bookId: 'b', title: 'T', pagesDir: '', vlmOutput: '',
+      vlmProvider: 'gemini', createdAt: 0,
+    );
+    const bookEmptyVlm = Book(
+      bookId: 'b', title: 'T', pagesDir: '', vlmOutput: '[]',
+      vlmProvider: 'gemini', createdAt: 0,
+    );
+    const bookWithVlm = Book(
+      bookId: 'b', title: 'T', pagesDir: '',
+      vlmOutput: '[{"page":1,"text":"hello"}]',
+      vlmProvider: 'gemini', createdAt: 0,
+    );
+    const errorVersion = AudioVersion(
+      versionId: 'b_en', bookId: 'b', language: 'en',
+      scriptJson: '{}', audioDir: '', status: 'error',
+      lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+    );
+
+    test('returns vlm when vlmOutput is empty string', () {
+      expect(inferResumeStage(bookNoVlm, errorVersion), ResumeStage.vlm);
+    });
+
+    test('returns vlm when vlmOutput is empty array', () {
+      expect(inferResumeStage(bookEmptyVlm, errorVersion), ResumeStage.vlm);
+    });
+
+    test('returns llm when vlmOutput exists but scriptJson is {}', () {
+      expect(inferResumeStage(bookWithVlm, errorVersion), ResumeStage.llm);
+    });
+
+    test('returns llm when scriptJson is empty string', () {
+      const v = AudioVersion(
+        versionId: 'b_en', bookId: 'b', language: 'en',
+        scriptJson: '', audioDir: '', status: 'error',
+        lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+      );
+      expect(inferResumeStage(bookWithVlm, v), ResumeStage.llm);
+    });
+
+    test('returns llm when scriptJson is invalid JSON', () {
+      const v = AudioVersion(
+        versionId: 'b_en', bookId: 'b', language: 'en',
+        scriptJson: 'not-valid-json', audioDir: '', status: 'error',
+        lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+      );
+      expect(inferResumeStage(bookWithVlm, v), ResumeStage.llm);
+    });
+
+    test('returns llm when chunks list is empty', () {
+      const v = AudioVersion(
+        versionId: 'b_en', bookId: 'b', language: 'en',
+        scriptJson: '{"characters":[],"chunks":[]}', audioDir: '',
+        status: 'error', lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+      );
+      expect(inferResumeStage(bookWithVlm, v), ResumeStage.llm);
+    });
+
+    test('returns tts when chunks exist but none are ready', () {
+      const v = AudioVersion(
+        versionId: 'b_en', bookId: 'b', language: 'en',
+        scriptJson: '{"characters":[],"chunks":['
+            '{"index":0,"status":"error"},{"index":1,"status":"pending"}]}',
+        audioDir: '', status: 'error',
+        lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+      );
+      expect(inferResumeStage(bookWithVlm, v), ResumeStage.tts);
+    });
+
+    test('returns tts when at least one chunk is ready (partial)', () {
+      const v = AudioVersion(
+        versionId: 'b_en', bookId: 'b', language: 'en',
+        scriptJson: '{"characters":[],"chunks":['
+            '{"index":0,"status":"ready"},{"index":1,"status":"error"}]}',
+        audioDir: '', status: 'error',
+        lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+      );
+      expect(inferResumeStage(bookWithVlm, v), ResumeStage.tts);
+    });
+  });
+
+  testWidgets('shows Retry button on error version with LLM failure',
+      (tester) async {
+    const errorVersion = AudioVersion(
+      versionId: 'detail_test_book_en', bookId: 'detail_test_book',
+      language: 'en', scriptJson: '{}', audioDir: '', status: 'error',
+      lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+    );
+    // testBook has vlmOutput='[]' so inferResumeStage → vlm → "Retry"
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        singleBookProvider('detail_test_book').overrideWith((_) async => testBook),
+        audioVersionsProvider('detail_test_book').overrideWith(
+          (_) async => [errorVersion],
+        ),
+      ],
+      child: const MaterialApp(home: BookDetailScreen(bookId: 'detail_test_book')),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Resume'), findsNothing);
+  });
+
+  testWidgets('shows Resume button on error version with partial TTS',
+      (tester) async {
+    const partialVersion = AudioVersion(
+      versionId: 'detail_test_book_en', bookId: 'detail_test_book',
+      language: 'en',
+      scriptJson: '{"characters":[],"chunks":['
+          '{"index":0,"status":"ready"},{"index":1,"status":"error"}]}',
+      audioDir: '', status: 'error',
+      lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+    );
+    final bookWithVlm = Book(
+      bookId: 'detail_test_book', title: 'Detail Test Book', coverPath: null,
+      pagesDir: '/tmp/test.pdf', vlmOutput: '[{"page":1,"text":"hi"}]',
+      vlmProvider: 'gemini', createdAt: 1711065600,
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        singleBookProvider('detail_test_book').overrideWith((_) async => bookWithVlm),
+        audioVersionsProvider('detail_test_book').overrideWith(
+          (_) async => [partialVersion],
+        ),
+      ],
+      child: const MaterialApp(home: BookDetailScreen(bookId: 'detail_test_book')),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Resume'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('no Retry/Resume button for ready version', (tester) async {
+    const readyVersion = AudioVersion(
+      versionId: 'detail_test_book_en', bookId: 'detail_test_book',
+      language: 'en', scriptJson: '{}', audioDir: '', status: 'ready',
+      lastGeneratedLine: 0, lastPlayedLine: 0, createdAt: 0,
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        singleBookProvider('detail_test_book').overrideWith((_) async => testBook),
+        audioVersionsProvider('detail_test_book').overrideWith(
+          (_) async => [readyVersion],
+        ),
+      ],
+      child: const MaterialApp(home: BookDetailScreen(bookId: 'detail_test_book')),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Retry'), findsNothing);
+    expect(find.text('Resume'), findsNothing);
+  });
+
   testWidgets('long-press on generating version does NOT show delete dialog', (tester) async {
     final version = AudioVersion(
       versionId: 'detail_test_book_zh',

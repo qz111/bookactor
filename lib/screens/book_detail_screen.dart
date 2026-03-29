@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,38 @@ import '../models/processing_mode.dart';
 import '../providers/books_provider.dart';
 import '../screens/loading_screen.dart';
 import '../widgets/language_badge.dart';
+
+/// Infers which pipeline stage failed, so resume re-enters at the right point.
+/// Only call when [version.status] == 'error'.
+ResumeStage inferResumeStage(Book book, AudioVersion version) {
+  if (book.vlmOutput.isEmpty || book.vlmOutput == '[]') {
+    return ResumeStage.vlm;
+  }
+  if (version.scriptJson.isEmpty || version.scriptJson == '{}') {
+    return ResumeStage.llm;
+  }
+  try {
+    final decoded = jsonDecode(version.scriptJson) as Map<String, dynamic>;
+    final chunks = decoded['chunks'] as List?;
+    if (chunks == null || chunks.isEmpty) return ResumeStage.llm;
+    return ResumeStage.tts; // TTS stage — partial or total failure
+  } catch (_) {
+    return ResumeStage.llm;
+  }
+}
+
+/// Returns true if ≥1 TTS chunk completed successfully.
+/// Determines whether to show "Resume" vs "Retry" label for TTS-stage errors.
+bool _hasTtsPartialProgress(AudioVersion version) {
+  try {
+    final decoded = jsonDecode(version.scriptJson) as Map<String, dynamic>;
+    final chunks = decoded['chunks'] as List? ?? [];
+    return chunks.any(
+        (c) => (c as Map<String, dynamic>)['status'] == 'ready');
+  } catch (_) {
+    return false;
+  }
+}
 
 class BookDetailScreen extends ConsumerStatefulWidget {
   final String bookId;
@@ -104,6 +137,40 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
     );
   }
 
+  Widget? _buildVersionTrailing(BuildContext context, Book book, AudioVersion version) {
+    if (version.status == 'ready') {
+      return IconButton(
+        icon: const Icon(Icons.play_circle_filled),
+        onPressed: () => context.push('/player/${version.versionId}'),
+      );
+    }
+    if (version.status == 'error') {
+      final stage = inferResumeStage(book, version);
+      final isPartialTts =
+          stage == ResumeStage.tts && _hasTtsPartialProgress(version);
+      final label = isPartialTts ? 'Resume' : 'Retry';
+      return TextButton(
+        onPressed: () => context.push(
+          '/loading',
+          extra: LoadingParams(
+            bookId: book.bookId,
+            versionId: version.versionId,
+            filePath: book.pagesDir,
+            language: version.language,
+            vlmProvider: book.vlmProvider,
+            llmProvider: version.llmProvider ?? 'gpt4o',
+            ttsProvider: version.ttsProvider ?? 'openai',
+            processingMode: ProcessingMode.textHeavy,
+            isNewBook: false,
+            startStage: stage,
+          ),
+        ),
+        child: Text(label),
+      );
+    }
+    return null; // generating — no action button
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookAsync = ref.watch(singleBookProvider(widget.bookId));
@@ -158,13 +225,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                                 language: v.language, status: v.status),
                             title: Text(widget._languageName(v.language)),
                             subtitle: Text(v.status),
-                            trailing: v.status == 'ready'
-                                ? IconButton(
-                                    icon: const Icon(Icons.play_circle_filled),
-                                    onPressed: () =>
-                                        context.push('/player/${v.versionId}'),
-                                  )
-                                : null,
+                            trailing: _buildVersionTrailing(context, book, v),
                           ),
                         )),
                     const SizedBox(height: 8),
