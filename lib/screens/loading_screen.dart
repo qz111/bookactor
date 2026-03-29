@@ -35,6 +35,10 @@ class LoadingParams {
   /// When non-null, the pipeline skips stages before this stage.
   /// null = run all stages from the beginning.
   final ResumeStage? startStage;
+  /// Pre-loaded scriptJson for TTS resume (startStage=tts). When set, the
+  /// pipeline uses this instead of reading from DB. Safe to pass because
+  /// no prior stages modify scriptJson during a TTS-only resume run.
+  final String? scriptJsonForResume;
 
   const LoadingParams({
     required this.bookId,
@@ -49,6 +53,7 @@ class LoadingParams {
     this.audioDirOverride,
     this.imageFilePaths,
     this.startStage,
+    this.scriptJsonForResume,
   });
 }
 
@@ -113,9 +118,14 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
     try {
       setState(() => _step = 0);
 
+      final bool runVlm = p.isNewBook || p.startStage == ResumeStage.vlm;
+      // startStage==null means new-language run (isNewBook=false): skip VLM, run LLM.
+      final bool runLlm =
+          runVlm || p.startStage == null || p.startStage == ResumeStage.llm;
+
       // ── 1. Analyze (VLM) ────────────────────────────────────────────────
-      List<Map<String, dynamic>> vlmOutput;
-      if (p.isNewBook) {
+      List<Map<String, dynamic>> vlmOutput = const [];
+      if (runVlm) {
         final List<Uint8List> imageBytes;
         final imagePaths = p.imageFilePaths;
         if (imagePaths != null && imagePaths.isNotEmpty) {
@@ -136,34 +146,63 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
         );
         if (!mounted) return;
 
-        await AppDatabase.instance.updateBookVlmOutput(
-            p.bookId, jsonEncode(pages));
+        await AppDatabase.instance.updateBookVlmOutput(p.bookId, jsonEncode(pages));
+        // Clear stale script so LLM writes a fresh one
+        await AppDatabase.instance.updateAudioVersionStatus(
+          p.versionId, 'generating', scriptJson: '{}');
+        // Delete stale audio files — new LLM may produce a different chunk count
+        final String audioDirToDelete;
+        if (p.audioDirOverride != null) {
+          audioDirToDelete = p.audioDirOverride!;
+        } else {
+          final docsDir = await getApplicationDocumentsDirectory();
+          audioDirToDelete = path_pkg.join(docsDir.path, 'audio', p.versionId);
+        }
+        final deleteDir = Directory(audioDirToDelete);
+        if (deleteDir.existsSync()) {
+          await deleteDir.delete(recursive: true);
+        }
         vlmOutput = pages;
-      } else {
+      } else if (runLlm) {
+        // Only needed when generateScript will be called
         final book = await AppDatabase.instance.getBook(p.bookId);
         vlmOutput = List<Map<String, dynamic>>.from(
             jsonDecode(book!.vlmOutput) as List);
       }
+      // When runLlm=false (TTS resume): vlmOutput stays [] — generateScript is skipped
       if (!mounted) return;
       setState(() => _step = 1);
 
       // ── 2. Script (LLM) ─────────────────────────────────────────────────
-      final scriptMap = await api.generateScript(
-        vlmOutput: vlmOutput,
-        language: p.language,
-        llmProvider: p.llmProvider,
-        ttsProvider: p.ttsProvider,
-      );
-      if (!mounted) return;
-
-      await AppDatabase.instance.updateAudioVersionStatus(
-        p.versionId, 'generating',
-        scriptJson: jsonEncode(scriptMap),
-      );
+      Map<String, dynamic> scriptMap;
+      if (runLlm) {
+        scriptMap = await api.generateScript(
+          vlmOutput: vlmOutput,
+          language: p.language,
+          llmProvider: p.llmProvider,
+          ttsProvider: p.ttsProvider,
+        );
+        if (!mounted) return;
+        await AppDatabase.instance.updateAudioVersionStatus(
+          p.versionId, 'generating',
+          scriptJson: jsonEncode(scriptMap),
+        );
+      } else {
+        // TTS resume: no prior stages modified scriptJson.
+        // Use scriptJsonForResume if provided (already fresh from DB at nav time);
+        // otherwise fall back to a DB read.
+        if (p.scriptJsonForResume != null) {
+          scriptMap = jsonDecode(p.scriptJsonForResume!) as Map<String, dynamic>;
+        } else {
+          final version = await AppDatabase.instance.getAudioVersion(p.versionId);
+          scriptMap = jsonDecode(version!.scriptJson) as Map<String, dynamic>;
+        }
+      }
       if (!mounted) return;
       setState(() => _step = 2);
 
       // ── 3. TTS ──────────────────────────────────────────────────────────
+      // Compute audioDir independently — DB value may be '' if version never completed
       final String audioDir;
       if (p.audioDirOverride != null) {
         audioDir = p.audioDirOverride!;
@@ -178,23 +217,37 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
       final allChunks =
           List<Map<String, dynamic>>.from(scriptMap['chunks'] as List);
 
-      final pendingChunks = allChunks
-          .where((c) => c['status'] == 'pending')
-          .map((c) {
-            final speakers = List<String>.from(c['speakers'] as List);
-            final voiceMap = {for (final s in speakers) s: script.voiceFor(s)};
-            return {
-              'index': c['index'],
-              'text': c['text'],
-              'voice_map': voiceMap,
-            };
-          })
-          .toList();
+      // Build list of chunks that actually need generating.
+      // Chunks with status='ready' and an existing file on disk are skipped.
+      final chunksToGenerate = <Map<String, dynamic>>[];
+      for (final c in allChunks) {
+        if (c['status'] == 'ready') {
+          final fileName =
+              'chunk_${(c['index'] as int).toString().padLeft(3, '0')}.wav';
+          if (File(path_pkg.join(audioDir, fileName)).existsSync()) {
+            continue; // already done
+          }
+        }
+        chunksToGenerate.add(c);
+      }
+
+      final pendingChunks = chunksToGenerate.map((c) {
+        final speakers = List<String>.from(c['speakers'] as List);
+        final voiceMap = {for (final s in speakers) s: script.voiceFor(s)};
+        return {
+          'index': c['index'],
+          'text': c['text'],
+          'voice_map': voiceMap,
+        };
+      }).toList();
 
       final audioResults = await api.generateAudio(
         chunks: pendingChunks,
         ttsProvider: p.ttsProvider,
       );
+
+      // scriptChunks is the mutable working copy — starts from allChunks
+      // so already-ready skipped chunks are preserved in the final JSON
       final scriptChunks = List<Map<String, dynamic>>.from(allChunks);
 
       for (final result in audioResults) {
@@ -223,7 +276,16 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
         );
       }
 
-      // Mark version as ready with audioDir persisted
+      // If any chunk failed, show error screen.
+      // AudioVersion.status stays 'generating' — cold restart will flip it to 'error'
+      // so the Retry/Resume button appears on the version card.
+      if (scriptChunks.any((c) => c['status'] == 'error')) {
+        if (!mounted) return;
+        setState(() => _hasError = true);
+        return;
+      }
+
+      // All chunks ready — mark version complete
       final existing = await AppDatabase.instance.getAudioVersion(p.versionId);
       if (existing != null) {
         await AppDatabase.instance.insertAudioVersion(

@@ -57,9 +57,26 @@ class _RecordingApiService extends ApiService {
     String ttsProvider = 'openai',
   }) async {
     calls.add('tts');
-    return [
-      {'index': 0, 'status': 'ready', 'audio_b64': base64Encode([1, 2, 3]), 'duration_ms': 1200}
-    ];
+    return chunks.map((c) => {
+      'index': c['index'] as int,
+      'status': 'ready',
+      'audio_b64': base64Encode([1, 2, 3]),
+      'duration_ms': 1200,
+    }).toList();
+  }
+}
+
+/// Returns status='error' for every chunk — used to test TTS failure handling.
+class _ErrorTtsApiService extends _RecordingApiService {
+  @override
+  Future<List<Map<String, dynamic>>> generateAudio({
+    required List<Map<String, dynamic>> chunks,
+    String ttsProvider = 'openai',
+  }) async {
+    calls.add('tts');
+    return chunks
+        .map((c) => {'index': c['index'] as int, 'status': 'error'})
+        .toList();
   }
 }
 
@@ -202,6 +219,185 @@ void main() {
 
     expect(fakeApi.calls, equals(['analyze', 'script', 'tts']));
     expect(fakeApi.analyzeCalls.single.length, equals(2));
+  });
+
+  testWidgets('LLM retry: skips VLM, runs LLM+TTS using stored vlmOutput',
+      (tester) async {
+    // Set up stored vlmOutput; version has empty scriptJson (LLM previously failed)
+    await AppDatabase.instance.updateBookVlmOutput(
+      'test_book_live', '[{"page":1,"text":"hello"}]');
+    await AppDatabase.instance.updateAudioVersionStatus(
+      'test_book_live_en', 'error', scriptJson: '{}');
+
+    final fakeApi = _RecordingApiService();
+    final tempAudioDir = Directory.systemTemp.createTempSync('bookactor_llm_retry_');
+    addTearDown(() => tempAudioDir.deleteSync(recursive: true));
+
+    final params = LoadingParams(
+      bookId: 'test_book_live',
+      versionId: 'test_book_live_en',
+      filePath: '',
+      language: 'en',
+      vlmProvider: 'gemini',
+      llmProvider: 'gpt4o',
+      ttsProvider: 'openai',
+      processingMode: ProcessingMode.textHeavy,
+      isNewBook: false,
+      startStage: ResumeStage.llm,
+      audioDirOverride: tempAudioDir.path,
+    );
+
+    final router = GoRouter(
+      initialLocation: '/loading',
+      routes: [
+        GoRoute(
+          path: '/loading',
+          builder: (_, __) => LoadingScreen(params: params, apiService: fakeApi),
+        ),
+        GoRoute(
+          path: '/player/:versionId',
+          builder: (_, __) => const Scaffold(body: Text('player')),
+        ),
+      ],
+    );
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ProviderScope(
+        child: MaterialApp.router(routerConfig: router),
+      ));
+      await Future<void>.delayed(const Duration(seconds: 5));
+    });
+    await tester.pump();
+
+    // VLM must NOT be called; LLM and TTS must be called in order
+    expect(fakeApi.calls, equals(['script', 'tts']));
+  });
+
+  testWidgets('TTS resume: skips VLM+LLM, skips ready chunk with file, regenerates errored chunk',
+      (tester) async {
+    final tempAudioDir = Directory.systemTemp.createTempSync('bookactor_tts_resume_');
+    addTearDown(() async {
+      // Small delay on Windows to allow file handles to close before deletion
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (tempAudioDir.existsSync()) tempAudioDir.deleteSync(recursive: true);
+    });
+
+    const scriptJson = '{"characters":[{"name":"Narrator","voice":"alloy"}],'
+        '"chunks":['
+        '{"index":0,"speakers":["Narrator"],"text":"Hello","duration_ms":1000,"status":"ready"},'
+        '{"index":1,"speakers":["Narrator"],"text":"World","duration_ms":0,"status":"error"}'
+        ']}';
+
+    final fakeApi = _RecordingApiService();
+    late File existingChunkFile;
+
+    await tester.runAsync(() async {
+      // chunk 0 is already done — file exists on disk
+      existingChunkFile = File('${tempAudioDir.path}/chunk_000.wav');
+      await existingChunkFile.writeAsBytes([1, 2, 3]);
+
+      // DB setup inside runAsync to stay in the same async zone as the pipeline
+      await AppDatabase.instance.updateBookVlmOutput(
+        'test_book_live', '[{"page":1,"text":"hello"}]');
+      await AppDatabase.instance.updateAudioVersionStatus(
+        'test_book_live_en', 'error', scriptJson: scriptJson);
+
+      final params = LoadingParams(
+        bookId: 'test_book_live',
+        versionId: 'test_book_live_en',
+        filePath: '',
+        language: 'en',
+        vlmProvider: 'gemini',
+        llmProvider: 'gpt4o',
+        ttsProvider: 'openai',
+        processingMode: ProcessingMode.textHeavy,
+        isNewBook: false,
+        startStage: ResumeStage.tts,
+        audioDirOverride: tempAudioDir.path,
+        scriptJsonForResume: scriptJson,
+      );
+
+      final router = GoRouter(
+        initialLocation: '/loading',
+        routes: [
+          GoRoute(
+            path: '/loading',
+            builder: (_, __) => LoadingScreen(params: params, apiService: fakeApi),
+          ),
+          GoRoute(
+            path: '/player/:versionId',
+            builder: (_, __) => const Scaffold(body: Text('player')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(ProviderScope(
+        child: MaterialApp.router(routerConfig: router),
+      ));
+      await Future<void>.delayed(const Duration(seconds: 5));
+    });
+    await tester.pump();
+    await tester.pump(); // second pump needed for GoRouter to complete navigation
+
+    // Neither VLM nor LLM called — only TTS
+    expect(fakeApi.calls, equals(['tts']));
+    // chunk_000.wav untouched (skipped)
+    expect(existingChunkFile.existsSync(), isTrue);
+    // chunk_001.wav written by TTS
+    expect(File('${tempAudioDir.path}/chunk_001.wav').existsSync(), isTrue);
+    // Player screen reached (all chunks now ready)
+    expect(find.text('player'), findsOneWidget);
+  });
+
+  testWidgets('TTS chunk error: shows error screen, does not navigate to player',
+      (tester) async {
+    final tempAudioDir = Directory.systemTemp.createTempSync('bookactor_tts_err_');
+    addTearDown(() => tempAudioDir.deleteSync(recursive: true));
+
+    final errorApi = _ErrorTtsApiService();
+
+    await AppDatabase.instance.updateBookVlmOutput(
+      'test_book_live', '');
+    await AppDatabase.instance.updateAudioVersionStatus(
+      'test_book_live_en', 'error', scriptJson: '{}');
+
+    final params = LoadingParams(
+      bookId: 'test_book_live',
+      versionId: 'test_book_live_en',
+      filePath: 'test/assets/fake_image.png',
+      language: 'en',
+      vlmProvider: 'gemini',
+      llmProvider: 'gpt4o',
+      ttsProvider: 'openai',
+      processingMode: ProcessingMode.textHeavy,
+      isNewBook: true,  // full run so VLM+LLM fire, then TTS errors
+      audioDirOverride: tempAudioDir.path,
+    );
+
+    final router = GoRouter(
+      initialLocation: '/loading',
+      routes: [
+        GoRoute(
+          path: '/loading',
+          builder: (_, __) => LoadingScreen(params: params, apiService: errorApi),
+        ),
+        GoRoute(
+          path: '/player/:versionId',
+          builder: (_, __) => const Scaffold(body: Text('player')),
+        ),
+      ],
+    );
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ProviderScope(
+        child: MaterialApp.router(routerConfig: router),
+      ));
+      await Future<void>.delayed(const Duration(seconds: 5));
+    });
+    await tester.pump();
+
+    expect(find.text('Something went wrong'), findsOneWidget);
+    expect(find.text('player'), findsNothing);
   });
 
   group('LoadingParams.startStage', () {
