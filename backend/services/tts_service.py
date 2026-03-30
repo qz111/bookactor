@@ -153,7 +153,7 @@ def _split_qwen_segment(seg: dict) -> list[dict]:
     """Split a segment exceeding 300 chars at sentence boundaries."""
     text, voice = seg["text"], seg["voice"]
     if len(text) <= 300:
-        return [seg]
+        return [seg.copy()]
     results = []
     while len(text) > 300:
         window = text[:300]

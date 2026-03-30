@@ -395,7 +395,7 @@ class TestMergeQwenSegments:
         from backend.services.tts_service import _merge_qwen_segments
         assert _merge_qwen_segments([]) == []
 
-    def test_segment_at_exactly_300_chars_not_split(self):
+    def test_single_long_segment_passes_through(self):
         from backend.services.tts_service import _merge_qwen_segments
         segs = [{"text": "甲" * 300, "voice": "Cherry"}]
         result = _merge_qwen_segments(segs)
@@ -444,6 +444,13 @@ class TestSplitQwenSegment:
         seg = {"text": "甲" * 400, "voice": "Serena"}
         result = _split_qwen_segment(seg)
         assert all(p["voice"] == "Serena" for p in result)
+
+    def test_exactly_300_chars_not_split(self):
+        from backend.services.tts_service import _split_qwen_segment
+        seg = {"text": "甲" * 300, "voice": "Cherry"}
+        result = _split_qwen_segment(seg)
+        assert len(result) == 1
+        assert result[0]["text"] == "甲" * 300
 
     def test_flatten_expands_all_segments(self):
         from backend.services.tts_service import _flatten_split_qwen_segments
