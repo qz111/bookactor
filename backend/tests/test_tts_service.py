@@ -520,3 +520,154 @@ class TestGenerateAudio:
             ))
         assert result[0]["status"] == "ready"
         assert result[0]["duration_ms"] == 500
+
+
+class TestCallQwenSegment:
+    def test_returns_wav_bytes_on_success(self):
+        from backend.services import tts_service
+
+        fake_wav = _make_wav(500)
+        mock_response = MagicMock()
+        mock_response.content = fake_wav
+        mock_client = MagicMock()
+
+        async def fake_create(**kwargs):
+            return mock_response
+
+        mock_client.audio.speech.create = fake_create
+        result = asyncio.run(tts_service._call_qwen_segment(
+            mock_client, {"text": "你好", "voice": "Cherry"}
+        ))
+        assert result == fake_wav
+
+    def test_returns_none_on_empty_response(self):
+        from backend.services import tts_service
+
+        mock_response = MagicMock()
+        mock_response.content = b""
+        mock_client = MagicMock()
+
+        async def fake_create(**kwargs):
+            return mock_response
+
+        mock_client.audio.speech.create = fake_create
+        result = asyncio.run(tts_service._call_qwen_segment(
+            mock_client, {"text": "你好", "voice": "Cherry"}
+        ))
+        assert result is None
+
+    def test_returns_none_on_exception(self):
+        from backend.services import tts_service
+
+        mock_client = MagicMock()
+
+        async def fake_create(**kwargs):
+            raise RuntimeError("API down")
+
+        mock_client.audio.speech.create = fake_create
+        result = asyncio.run(tts_service._call_qwen_segment(
+            mock_client, {"text": "你好", "voice": "Cherry"}
+        ))
+        assert result is None
+
+    def test_calls_correct_model_and_format(self):
+        from backend.services import tts_service
+
+        fake_wav = _make_wav(200)
+        mock_response = MagicMock()
+        mock_response.content = fake_wav
+        mock_client = MagicMock()
+        captured = {}
+
+        async def fake_create(**kwargs):
+            captured.update(kwargs)
+            return mock_response
+
+        mock_client.audio.speech.create = fake_create
+        asyncio.run(tts_service._call_qwen_segment(
+            mock_client, {"text": "你好", "voice": "Cherry"}
+        ))
+        assert captured["model"] == "qwen-tts-instruct-flash"
+        assert captured["response_format"] == "wav"
+        assert captured["voice"] == "Cherry"
+        assert captured["input"] == "你好"
+
+
+class TestGenerateQwenThrottled:
+    def test_returns_ready_result_for_each_chunk(self):
+        from backend.services import tts_service
+
+        fake_wav = _make_wav(500)
+        mock_client = MagicMock()
+
+        async def fake_call(client, seg):
+            return fake_wav
+
+        chunks = [
+            {"index": 0, "text": "Narrator: 你好。", "voice_map": {"Narrator": "Cherry"}},
+            {"index": 1, "text": "Bear: 再见。", "voice_map": {"Bear": "Ethan"}},
+        ]
+        with patch.object(tts_service, "_call_qwen_segment", side_effect=fake_call):
+            results = asyncio.run(tts_service._generate_qwen_throttled(mock_client, chunks))
+
+        assert len(results) == 2
+        assert all(r["status"] == "ready" for r in results)
+
+    def test_chunk_error_on_segment_failure(self):
+        from backend.services import tts_service
+
+        mock_client = MagicMock()
+
+        async def fake_call(client, seg):
+            return None  # simulates failure
+
+        chunks = [{"index": 0, "text": "Narrator: 你好。", "voice_map": {"Narrator": "Cherry"}}]
+        with patch.object(tts_service, "_call_qwen_segment", side_effect=fake_call):
+            results = asyncio.run(tts_service._generate_qwen_throttled(mock_client, chunks))
+
+        assert results[0]["status"] == "error"
+        assert results[0]["duration_ms"] == 0
+
+    def test_silence_appended_to_output(self):
+        from backend.services import tts_service
+
+        raw_wav = _make_wav(500)
+        mock_client = MagicMock()
+
+        async def fake_call(client, seg):
+            return raw_wav
+
+        chunks = [{"index": 0, "text": "Narrator: 你好。", "voice_map": {"Narrator": "Cherry"}}]
+        with patch.object(tts_service, "_call_qwen_segment", side_effect=fake_call):
+            results = asyncio.run(tts_service._generate_qwen_throttled(mock_client, chunks))
+
+        # silence adds ~600 ms; raw wav is 500 ms → result must be > 500
+        assert results[0]["status"] == "ready"
+        assert results[0]["duration_ms"] > 500
+
+
+class TestGenerateAudioQwen:
+    def test_routes_to_qwen_with_dashscope_base_url(self):
+        from backend.services import tts_service
+
+        fake_result = [{"index": 0, "status": "ready", "audio_b64": "x", "duration_ms": 500}]
+
+        async def fake_throttled(client, chunks, rpm=180):
+            return fake_result
+
+        with patch("backend.services.tts_service._generate_qwen_throttled", side_effect=fake_throttled), \
+             patch("backend.services.tts_service.AsyncOpenAI") as mock_openai:
+            mock_openai.return_value = MagicMock()
+            result = asyncio.run(tts_service.generate_audio(
+                chunks=[{"index": 0, "text": "Narrator: 你好。", "voice_map": {"Narrator": "Cherry"}}],
+                tts_provider="qwen",
+                openai_api_key="",
+                google_api_key="",
+                qwen_api_key="test-key",
+            ))
+
+        mock_openai.assert_called_once_with(
+            api_key="test-key",
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+        assert result[0]["status"] == "ready"

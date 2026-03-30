@@ -174,6 +174,71 @@ def _flatten_split_qwen_segments(segments: list[dict]) -> list[dict]:
     return [piece for seg in segments for piece in _split_qwen_segment(seg)]
 
 
+async def _call_qwen_segment(client: AsyncOpenAI, seg: dict) -> bytes | None:
+    """Call DashScope for a single segment. Returns WAV bytes or None on error."""
+    try:
+        response = await client.audio.speech.create(
+            model="qwen-tts-instruct-flash",
+            input=seg["text"],
+            voice=seg["voice"],
+            response_format="wav",
+        )
+        if not response.content:
+            raise ValueError("Empty response from DashScope")
+        return response.content
+    except Exception:
+        logger.exception("Qwen TTS segment call failed")
+        return None
+
+
+async def _generate_qwen_throttled(client, chunks: list[dict], rpm: int = 180) -> list[dict]:
+    """Generate Qwen TTS across all chunks, throttling between each API call at rpm."""
+    min_interval = 60.0 / rpm
+    results = []
+    last_start: float | None = None
+
+    for chunk in chunks:
+        segments = _parse_chunk_segments(chunk["text"], chunk["voice_map"])
+        segments = _merge_qwen_segments(segments)
+        segments = _flatten_split_qwen_segments(segments)
+
+        wav_parts = []
+        chunk_error = False
+        for seg in segments:
+            if last_start is not None:
+                elapsed = asyncio.get_event_loop().time() - last_start
+                wait = min_interval - elapsed
+                if wait > 0:
+                    await asyncio.sleep(wait)
+            last_start = asyncio.get_event_loop().time()
+
+            part = await _call_qwen_segment(client, seg)
+            if part is None:
+                chunk_error = True
+                break
+            wav_parts.append(part)
+
+        if chunk_error or not wav_parts:
+            results.append({"index": chunk["index"], "status": "error", "duration_ms": 0})
+        else:
+            combined = AudioSegment.from_wav(io.BytesIO(wav_parts[0]))
+            for part in wav_parts[1:]:
+                combined += AudioSegment.from_wav(io.BytesIO(part))
+            buf = io.BytesIO()
+            combined.export(buf, format="wav")
+            wav_bytes = buf.getvalue()
+            wav_with_silence = _append_silence(wav_bytes, "wav")
+            duration_ms = _wav_duration_ms(wav_with_silence)
+            results.append({
+                "index": chunk["index"],
+                "status": "ready",
+                "audio_b64": base64.b64encode(wav_with_silence).decode(),
+                "duration_ms": duration_ms,
+            })
+
+    return results
+
+
 def _append_silence(audio_bytes: bytes, fmt: str, duration_ms: int = 600) -> bytes:
     """Append silence to an audio chunk using pydub.
 
@@ -328,11 +393,18 @@ async def generate_audio(
     tts_provider: str,
     openai_api_key: str,
     google_api_key: str,
+    qwen_api_key: str = "",
 ) -> list[dict]:
     """Generate TTS audio for all chunks; returns results sorted by index."""
     if tts_provider == "gemini":
         client = genai.Client(api_key=google_api_key)
         results = await _generate_gemini_throttled(client, chunks)
+    elif tts_provider == "qwen":
+        client = AsyncOpenAI(
+            api_key=qwen_api_key,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+        results = await _generate_qwen_throttled(client, chunks)
     else:
         client = AsyncOpenAI(api_key=openai_api_key)
         tasks = [_generate_chunk_openai(client, chunk) for chunk in chunks]
