@@ -13,8 +13,10 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _openAiController = TextEditingController();
   final _googleController = TextEditingController();
+  final _qwenController = TextEditingController();
   bool _showOpenAi = false;
   bool _showGoogle = false;
+  bool _showQwen = false;
   bool _saving = false;
 
   @override
@@ -28,6 +30,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!mounted) return;
     _openAiController.text = keys.openAi;
     _googleController.text = keys.google;
+    _qwenController.text = keys.qwen;
     setState(() {}); // Recompute canSave so Save button enables when keys are pre-filled.
   }
 
@@ -35,6 +38,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _openAiController.dispose();
     _googleController.dispose();
+    _qwenController.dispose();
     super.dispose();
   }
 
@@ -44,6 +48,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(settingsServiceProvider).saveKeys(
             openAiKey: _openAiController.text.trim(),
             googleKey: _googleController.text.trim(),
+            qwenKey: _qwenController.text.trim(),
           );
       ref.invalidate(apiKeysProvider);
       if (!mounted) return;
@@ -111,6 +116,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               suffixIcon: IconButton(
                 icon: Icon(_showGoogle ? Icons.visibility_off : Icons.visibility),
                 onPressed: () => setState(() => _showGoogle = !_showGoogle),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _qwenController,
+            obscureText: !_showQwen,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'Qwen API Key (DashScope)',
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                icon: Icon(_showQwen ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _showQwen = !_showQwen),
               ),
             ),
           ),
