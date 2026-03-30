@@ -39,6 +39,33 @@ class TestSystemPrompt:
         assert "aoede" not in prompt
 
 
+class TestSystemPromptQwen:
+    def test_qwen_voices_in_prompt(self):
+        from backend.services.llm_service import _system_prompt
+        prompt = _system_prompt("qwen")
+        assert "Cherry" in prompt
+        assert "Ethan" in prompt
+        assert "Serena" in prompt
+        assert "Dylan" in prompt
+
+    def test_qwen_prompt_excludes_gemini_voices(self):
+        from backend.services.llm_service import _system_prompt
+        prompt = _system_prompt("qwen")
+        assert "Aoede" not in prompt
+        assert "Charon" not in prompt
+
+    def test_qwen_prompt_contains_utterance_length_rule(self):
+        from backend.services.llm_service import _system_prompt
+        prompt = _system_prompt("qwen")
+        assert "250" in prompt
+
+    def test_gemini_prompt_excludes_qwen_voices(self):
+        from backend.services.llm_service import _system_prompt
+        prompt = _system_prompt("gemini")
+        assert "Cherry" not in prompt
+        assert "Ethan" not in prompt
+
+
 class TestGenerateScript:
     def test_returns_chunks_not_lines(self):
         from backend.services.llm_service import generate_script

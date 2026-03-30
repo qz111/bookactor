@@ -20,11 +20,12 @@ _LLM_KEY_SOURCE = {
 _VOICES = {
     "openai": "alloy|echo|fable|onyx|nova|shimmer",
     "gemini": "Aoede|Charon|Fenrir|Kore|Puck|Zephyr|Leda|Orus",
+    "qwen": "Cherry|Ethan|Serena|Dylan",
 }
 
 def _system_prompt(tts_provider: str) -> str:
     voices = _VOICES.get(tts_provider, _VOICES["openai"])
-    return (
+    prompt = (
         "You are a children's audiobook script writer. Given the extracted story text from a "
         "picture book, output ONLY a JSON object (no markdown fences) with this exact structure:\n"
         f'{{"characters": [{{"name": "...", "voice": "<{voices}>", "traits": "..."}}], '
@@ -34,7 +35,9 @@ def _system_prompt(tts_provider: str) -> str:
         "- Narrator is always present. Assign each character a distinct voice. "
         "Never change a character's voice mid-story.\n"
         "- Group the full story into sequential dialogue passages. Each chunk's 'text' field "
-        "must be between 2000 and 3000 characters.\n"
+        "must not exceed 3500 bytes when UTF-8 encoded. "
+        "For Latin-script languages (English, French, German, etc.) this allows roughly 2000–3000 characters. "
+        "For CJK scripts (Chinese, Japanese, Korean) limit to roughly 800–1000 characters per chunk.\n"
         "- Format 'text' as lines of 'Character: utterance\\n' — each Character name exactly "
         "matching a name in the 'characters' array.\n"
         "- Never cut mid-sentence. Chunks end at natural pause points.\n"
@@ -46,11 +49,21 @@ def _system_prompt(tts_provider: str) -> str:
         "voice names, speakers lists, and all keys — must remain in English.\n"
         "- Character names in the 'text' field must be the same English names as in 'characters'.\n"
         "- Every character must have a UNIQUE voice — never assign the same voice to two characters.\n"
-        "- Female voices: Aoede, Kore, Zephyr, Leda. Male voices: Charon, Fenrir, Puck, Orus.\n"
+    )
+    if tts_provider == "gemini":
+        prompt += "- Female voices: Aoede, Kore, Zephyr, Leda. Male voices: Charon, Fenrir, Puck, Orus.\n"
+    elif tts_provider == "qwen":
+        prompt += "- Female voices: Cherry, Serena. Male voices: Ethan, Dylan.\n"
+        prompt += (
+            "- For Qwen TTS (Chinese): keep each individual character utterance under "
+            "250 Chinese characters. Split long speeches into multiple lines if needed.\n"
+        )
+    prompt += (
         "- Use gender contrast: if Narrator uses a female voice, assign male voices to male "
         "characters and vice versa. Mix genders across characters for the best listening experience.\n"
         f"- Voice names must use title case: {voices}."
     )
+    return prompt
 
 _STRICT_ADDENDUM = (
     "\n\nIMPORTANT: Your previous response was not valid JSON. "
