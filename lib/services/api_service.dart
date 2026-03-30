@@ -16,6 +16,7 @@ class ApiService {
   final String openAiKey;
   final String googleKey;
   final String qwenKey;
+  final String qwenWorkspaceId;
   final http.Client client;
 
   ApiService({
@@ -23,6 +24,7 @@ class ApiService {
     required this.openAiKey,
     required this.googleKey,
     this.qwenKey = '',
+    this.qwenWorkspaceId = '',
     http.Client? client,
   }) : client = client ?? http.Client();
 
@@ -86,6 +88,7 @@ class ApiService {
         'openai_api_key': openAiKey,
         'google_api_key': googleKey,
         'qwen_api_key': qwenKey,
+        'qwen_workspace_id': qwenWorkspaceId,
       }),
     );
     _checkStatus(response);

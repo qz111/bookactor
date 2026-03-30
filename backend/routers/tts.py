@@ -19,6 +19,7 @@ class TtsRequest(BaseModel):
     openai_api_key: str = ""
     google_api_key: str = ""
     qwen_api_key: str = ""
+    qwen_workspace_id: str = ""
 
 
 @router.post("/tts")
@@ -32,6 +33,7 @@ async def tts(req: TtsRequest):
             openai_api_key=req.openai_api_key,
             google_api_key=req.google_api_key,
             qwen_api_key=req.qwen_api_key,
+            qwen_workspace_id=req.qwen_workspace_id,
         )
     except Exception as exc:
         logger.exception("Error in /tts")

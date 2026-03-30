@@ -14,6 +14,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _openAiController = TextEditingController();
   final _googleController = TextEditingController();
   final _qwenController = TextEditingController();
+  final _qwenWorkspaceController = TextEditingController();
   bool _showOpenAi = false;
   bool _showGoogle = false;
   bool _showQwen = false;
@@ -31,6 +32,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _openAiController.text = keys.openAi;
     _googleController.text = keys.google;
     _qwenController.text = keys.qwen;
+    _qwenWorkspaceController.text = keys.qwenWorkspaceId;
     setState(() {}); // Recompute canSave so Save button enables when keys are pre-filled.
   }
 
@@ -39,6 +41,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _openAiController.dispose();
     _googleController.dispose();
     _qwenController.dispose();
+    _qwenWorkspaceController.dispose();
     super.dispose();
   }
 
@@ -49,6 +52,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             openAiKey: _openAiController.text.trim(),
             googleKey: _googleController.text.trim(),
             qwenKey: _qwenController.text.trim(),
+            qwenWorkspaceId: _qwenWorkspaceController.text.trim(),
           );
       ref.invalidate(apiKeysProvider);
       if (!mounted) return;
@@ -131,6 +135,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icon(_showQwen ? Icons.visibility_off : Icons.visibility),
                 onPressed: () => setState(() => _showQwen = !_showQwen),
               ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _qwenWorkspaceController,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Qwen Workspace ID (Frankfurt region only)',
+              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 32),

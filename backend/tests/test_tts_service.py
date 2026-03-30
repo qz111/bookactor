@@ -664,6 +664,7 @@ class TestGenerateAudioQwen:
                 openai_api_key="",
                 google_api_key="",
                 qwen_api_key="test-key",
+                qwen_workspace_id="",
             ))
 
         mock_openai.assert_called_once_with(
@@ -671,3 +672,28 @@ class TestGenerateAudioQwen:
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         )
         assert result[0]["status"] == "ready"
+
+    def test_routes_to_qwen_with_frankfurt_base_url(self):
+        from backend.services import tts_service
+
+        fake_result = [{"index": 0, "status": "ready", "audio_b64": "x", "duration_ms": 500}]
+
+        async def fake_throttled(client, chunks, rpm=180):
+            return fake_result
+
+        with patch("backend.services.tts_service._generate_qwen_throttled", side_effect=fake_throttled), \
+             patch("backend.services.tts_service.AsyncOpenAI") as mock_openai:
+            mock_openai.return_value = MagicMock()
+            asyncio.run(tts_service.generate_audio(
+                chunks=[{"index": 0, "text": "Narrator: 你好。", "voice_map": {"Narrator": "Cherry"}}],
+                tts_provider="qwen",
+                openai_api_key="",
+                google_api_key="",
+                qwen_api_key="test-key",
+                qwen_workspace_id="my-workspace",
+            ))
+
+        mock_openai.assert_called_once_with(
+            api_key="test-key",
+            base_url="https://my-workspace.eu-central-1.maas.aliyuncs.com/compatible-mode/v1",
+        )

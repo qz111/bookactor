@@ -394,15 +394,20 @@ async def generate_audio(
     openai_api_key: str,
     google_api_key: str,
     qwen_api_key: str = "",
+    qwen_workspace_id: str = "",
 ) -> list[dict]:
     """Generate TTS audio for all chunks; returns results sorted by index."""
     if tts_provider == "gemini":
         client = genai.Client(api_key=google_api_key)
         results = await _generate_gemini_throttled(client, chunks)
     elif tts_provider == "qwen":
+        if qwen_workspace_id:
+            base_url = f"https://{qwen_workspace_id}.eu-central-1.maas.aliyuncs.com/compatible-mode/v1"
+        else:
+            base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         client = AsyncOpenAI(
             api_key=qwen_api_key,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            base_url=base_url,
         )
         results = await _generate_qwen_throttled(client, chunks)
     else:

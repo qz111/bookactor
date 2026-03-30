@@ -112,6 +112,7 @@ void main() {
         expect(body.containsKey('lines'), false);
         expect(body['openai_api_key'], 'test-openai-key');
         expect(body['qwen_api_key'], '');   // default empty string when not supplied
+        expect(body['qwen_workspace_id'], '');
         return http.Response(
           jsonEncode(fakeResults),
           200,
