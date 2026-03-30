@@ -182,9 +182,31 @@ _DASHSCOPE_TTS_URL = (
 
 _CJK_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df]')
 
+# Voices not supported by qwen3-tts-instruct-flash (dialect/legacy voices).
+# Maps to the closest supported substitute of the same gender.
+_QWEN_VOICE_FALLBACK = {
+    "Dylan": "Kai",    # Beijing dialect male → standard male
+    "Jada": "Cherry",  # Shanghai dialect female → standard female
+    "Sunny": "Cherry", # Sichuan dialect female → standard female
+    "Eric": "Kai",     # Sichuan dialect male → standard male
+    "Rocky": "Kai",    # Cantonese male → standard male
+    "Kiki": "Cherry",  # Cantonese female → standard female
+    "Li": "Kai",       # Nanjing dialect male → standard male
+    "Marcus": "Kai",   # Shaanxi dialect male → standard male
+    "Roy": "Kai",      # Southern Min male → standard male
+    "Peter": "Kai",    # Tianjin dialect male → standard male
+}
+
 
 def _language_type(text: str) -> str:
     return "Chinese" if _CJK_RE.search(text) else "English"
+
+
+def _resolve_qwen_voice(voice: str) -> str:
+    resolved = _QWEN_VOICE_FALLBACK.get(voice, voice)
+    if resolved != voice:
+        logger.warning("Qwen voice '%s' not supported by qwen3-tts-instruct-flash, using '%s'", voice, resolved)
+    return resolved
 
 
 async def _call_qwen_segment(client: httpx.AsyncClient, seg: dict) -> bytes | None:
@@ -194,7 +216,7 @@ async def _call_qwen_segment(client: httpx.AsyncClient, seg: dict) -> bytes | No
             "model": "qwen3-tts-instruct-flash",
             "input": {
                 "text": seg["text"],
-                "voice": seg["voice"],
+                "voice": _resolve_qwen_voice(seg["voice"]),
                 "language_type": _language_type(seg["text"]),
             },
         }
