@@ -135,6 +135,45 @@ def _parse_chunk_segments(text: str, voice_map: dict[str, str]) -> list[dict]:
     return segments
 
 
+def _merge_qwen_segments(segments: list[dict]) -> list[dict]:
+    """Merge consecutive same-voice segments that fit within 300 chars (incl. separator)."""
+    if not segments:
+        return []
+    merged = [segments[0].copy()]
+    for seg in segments[1:]:
+        last = merged[-1]
+        if seg["voice"] == last["voice"] and len(last["text"]) + 1 + len(seg["text"]) <= 300:
+            last["text"] = last["text"] + "，" + seg["text"]
+        else:
+            merged.append(seg.copy())
+    return merged
+
+
+def _split_qwen_segment(seg: dict) -> list[dict]:
+    """Split a segment exceeding 300 chars at sentence boundaries."""
+    text, voice = seg["text"], seg["voice"]
+    if len(text) <= 300:
+        return [seg]
+    results = []
+    while len(text) > 300:
+        window = text[:300]
+        cut = max(window.rfind("。"), window.rfind("！"), window.rfind("？"))
+        if cut == -1:
+            cut = window.rfind("，")
+        if cut == -1:
+            cut = 299  # hard split
+        results.append({"text": text[:cut + 1], "voice": voice})
+        text = text[cut + 1:]
+    if text:
+        results.append({"text": text, "voice": voice})
+    return results
+
+
+def _flatten_split_qwen_segments(segments: list[dict]) -> list[dict]:
+    """Apply split to all segments, returning a flat list."""
+    return [piece for seg in segments for piece in _split_qwen_segment(seg)]
+
+
 def _append_silence(audio_bytes: bytes, fmt: str, duration_ms: int = 600) -> bytes:
     """Append silence to an audio chunk using pydub.
 

@@ -352,6 +352,109 @@ class TestGenerateChunkOpenai:
         assert result["duration_ms"] == 0
 
 
+class TestMergeQwenSegments:
+    def test_merges_consecutive_same_voice(self):
+        from backend.services.tts_service import _merge_qwen_segments
+        segs = [
+            {"text": "你好", "voice": "Cherry"},
+            {"text": "再见", "voice": "Cherry"},
+        ]
+        result = _merge_qwen_segments(segs)
+        assert len(result) == 1
+        assert result[0]["text"] == "你好，再见"
+        assert result[0]["voice"] == "Cherry"
+
+    def test_does_not_merge_different_voices(self):
+        from backend.services.tts_service import _merge_qwen_segments
+        segs = [
+            {"text": "你好", "voice": "Cherry"},
+            {"text": "再见", "voice": "Ethan"},
+        ]
+        result = _merge_qwen_segments(segs)
+        assert len(result) == 2
+
+    def test_respects_300_char_limit(self):
+        from backend.services.tts_service import _merge_qwen_segments
+        # Two segments that together exceed 300 chars should NOT be merged
+        long_a = "甲" * 200
+        long_b = "乙" * 200
+        segs = [{"text": long_a, "voice": "Cherry"}, {"text": long_b, "voice": "Cherry"}]
+        result = _merge_qwen_segments(segs)
+        assert len(result) == 2
+
+    def test_separator_counts_toward_limit(self):
+        from backend.services.tts_service import _merge_qwen_segments
+        # Each 150 chars — combined is 150+1+150=301, over limit
+        a = "甲" * 150
+        b = "乙" * 150
+        segs = [{"text": a, "voice": "Cherry"}, {"text": b, "voice": "Cherry"}]
+        result = _merge_qwen_segments(segs)
+        assert len(result) == 2
+
+    def test_empty_input(self):
+        from backend.services.tts_service import _merge_qwen_segments
+        assert _merge_qwen_segments([]) == []
+
+    def test_segment_at_exactly_300_chars_not_split(self):
+        from backend.services.tts_service import _merge_qwen_segments
+        segs = [{"text": "甲" * 300, "voice": "Cherry"}]
+        result = _merge_qwen_segments(segs)
+        assert len(result) == 1
+        assert len(result[0]["text"]) == 300
+
+
+class TestSplitQwenSegment:
+    def test_short_segment_returned_as_is(self):
+        from backend.services.tts_service import _split_qwen_segment
+        seg = {"text": "你好世界。", "voice": "Cherry"}
+        assert _split_qwen_segment(seg) == [seg]
+
+    def test_splits_at_last_sentence_end_before_300(self):
+        from backend.services.tts_service import _split_qwen_segment
+        # 250 chars + 。 + 60 chars = 311 total — must split at the 。
+        part_a = "甲" * 250 + "。"
+        part_b = "乙" * 60
+        seg = {"text": part_a + part_b, "voice": "Cherry"}
+        result = _split_qwen_segment(seg)
+        assert len(result) == 2
+        assert result[0]["text"] == part_a
+        assert result[1]["text"] == part_b
+
+    def test_falls_back_to_comma_when_no_sentence_end(self):
+        from backend.services.tts_service import _split_qwen_segment
+        # 250 chars + ， + 60 chars, no 。！？
+        part_a = "甲" * 250 + "，"
+        part_b = "乙" * 60
+        seg = {"text": part_a + part_b, "voice": "Ethan"}
+        result = _split_qwen_segment(seg)
+        assert len(result) == 2
+        assert result[0]["text"].endswith("，")
+
+    def test_hard_splits_at_300_when_no_punctuation(self):
+        from backend.services.tts_service import _split_qwen_segment
+        text = "甲" * 400  # no punctuation at all
+        seg = {"text": text, "voice": "Cherry"}
+        result = _split_qwen_segment(seg)
+        assert len(result) == 2
+        assert len(result[0]["text"]) == 300
+        assert len(result[1]["text"]) == 100
+
+    def test_voice_preserved_in_all_pieces(self):
+        from backend.services.tts_service import _split_qwen_segment
+        seg = {"text": "甲" * 400, "voice": "Serena"}
+        result = _split_qwen_segment(seg)
+        assert all(p["voice"] == "Serena" for p in result)
+
+    def test_flatten_expands_all_segments(self):
+        from backend.services.tts_service import _flatten_split_qwen_segments
+        segs = [
+            {"text": "甲" * 400, "voice": "Cherry"},  # will be split
+            {"text": "短文", "voice": "Ethan"},        # will not be split
+        ]
+        result = _flatten_split_qwen_segments(segs)
+        assert len(result) == 3  # 2 pieces from first + 1 from second
+
+
 class TestGenerateAudio:
     def test_routes_to_gemini(self):
         from backend.services import tts_service
