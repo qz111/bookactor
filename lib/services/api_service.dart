@@ -15,12 +15,14 @@ class ApiService {
   final String baseUrl;
   final String openAiKey;
   final String googleKey;
+  final String qwenKey;
   final http.Client client;
 
   ApiService({
     required this.baseUrl,
     required this.openAiKey,
     required this.googleKey,
+    this.qwenKey = '',
     http.Client? client,
   }) : client = client ?? http.Client();
 
@@ -83,6 +85,7 @@ class ApiService {
         'tts_provider': ttsProvider,
         'openai_api_key': openAiKey,
         'google_api_key': googleKey,
+        'qwen_api_key': qwenKey,
       }),
     );
     _checkStatus(response);

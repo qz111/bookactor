@@ -7,10 +7,10 @@ final settingsServiceProvider = Provider<SettingsService>((ref) {
   return SettingsService();
 });
 
-/// Loads both API keys from secure storage.
+/// Loads all API keys from secure storage.
 /// Invalidate this after saveKeys() to rebuild apiServiceProvider.
 final apiKeysProvider =
-    FutureProvider<({String openAi, String google})>((ref) async {
+    FutureProvider<({String openAi, String google, String qwen})>((ref) async {
   return ref.watch(settingsServiceProvider).getKeys();
 });
 
@@ -21,6 +21,7 @@ final apiServiceProvider = FutureProvider<ApiService>((ref) async {
     baseUrl: 'http://localhost:8088',
     openAiKey: keys.openAi,
     googleKey: keys.google,
+    qwenKey: keys.qwen,
   );
 });
 
