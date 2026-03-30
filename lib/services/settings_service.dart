@@ -10,6 +10,8 @@ class SettingsService {
   SettingsService({FlutterSecureStorage? storage})
       : _storage = storage ?? const FlutterSecureStorage();
 
+  // Qwen key is optional — only required when using Chinese TTS.
+  // OpenAI + Google keys are the minimum required to launch the app.
   Future<bool> hasKeys() async {
     final openAi = await _storage.read(key: _openAiKey);
     final google = await _storage.read(key: _googleKey);

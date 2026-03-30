@@ -111,6 +111,7 @@ void main() {
         expect(body['chunks'][0]['voice_map'], isA<Map>());
         expect(body.containsKey('lines'), false);
         expect(body['openai_api_key'], 'test-openai-key');
+        expect(body['qwen_api_key'], '');   // default empty string when not supplied
         return http.Response(
           jsonEncode(fakeResults),
           200,
