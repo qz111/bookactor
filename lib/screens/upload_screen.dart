@@ -263,7 +263,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                 .map((l) => DropdownMenuItem(
                     value: l['code'], child: Text(l['name']!)))
                 .toList(),
-            onChanged: (v) => setState(() => _language = v!),
+            onChanged: (v) => setState(() {
+              _language = v!;
+              if (const {'zh', 'zh-TW'}.contains(_language)) {
+                _ttsProvider = 'qwen';
+              } else if (_ttsProvider == 'qwen') {
+                _ttsProvider = 'openai';
+              }
+            }),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -297,8 +304,11 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             items: const [
               DropdownMenuItem(value: 'openai', child: Text('OpenAI TTS')),
               DropdownMenuItem(value: 'gemini', child: Text('Gemini TTS')),
+              DropdownMenuItem(value: 'qwen', child: Text('Qwen TTS (Chinese)')),
             ],
-            onChanged: (v) => setState(() => _ttsProvider = v!),
+            onChanged: const {'zh', 'zh-TW'}.contains(_language)
+                ? null
+                : (v) => setState(() => _ttsProvider = v!),
           ),
           const SizedBox(height: 32),
           FilledButton.icon(

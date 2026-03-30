@@ -257,7 +257,7 @@ class _NewLanguageSheet extends StatefulWidget {
 class _NewLanguageSheetState extends State<_NewLanguageSheet> {
   String _language = 'zh';
   String _llmProvider = 'gpt4o';
-  String _ttsProvider = 'openai';
+  String _ttsProvider = 'qwen';   // locked because default language is zh
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +279,14 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                 .map((l) =>
                     DropdownMenuItem(value: l['code'], child: Text(l['name']!)))
                 .toList(),
-            onChanged: (v) => setState(() => _language = v!),
+            onChanged: (v) => setState(() {
+              _language = v!;
+              if (const {'zh', 'zh-TW'}.contains(_language)) {
+                _ttsProvider = 'qwen';
+              } else if (_ttsProvider == 'qwen') {
+                _ttsProvider = 'openai';
+              }
+            }),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -301,8 +308,11 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
             items: const [
               DropdownMenuItem(value: 'openai', child: Text('OpenAI TTS')),
               DropdownMenuItem(value: 'gemini', child: Text('Gemini TTS')),
+              DropdownMenuItem(value: 'qwen', child: Text('Qwen TTS (Chinese)')),
             ],
-            onChanged: (v) => setState(() => _ttsProvider = v!),
+            onChanged: const {'zh', 'zh-TW'}.contains(_language)
+                ? null
+                : (v) => setState(() => _ttsProvider = v!),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -316,6 +326,7 @@ class _NewLanguageSheetState extends State<_NewLanguageSheet> {
                   bookId: widget.book.bookId,
                   language: _language,
                   llmProvider: _llmProvider,
+                  ttsProvider: _ttsProvider,
                   scriptJson: '{}',
                   audioDir: '',
                   status: 'generating',
