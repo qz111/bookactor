@@ -3,6 +3,7 @@ import base64
 import io
 import logging
 import wave
+import httpx
 from google import genai
 from google.genai import types
 from openai import AsyncOpenAI
@@ -174,18 +175,29 @@ def _flatten_split_qwen_segments(segments: list[dict]) -> list[dict]:
     return [piece for seg in segments for piece in _split_qwen_segment(seg)]
 
 
-async def _call_qwen_segment(client: AsyncOpenAI, seg: dict) -> bytes | None:
-    """Call DashScope for a single segment. Returns WAV bytes or None on error."""
+_DASHSCOPE_TTS_URL = (
+    "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+)
+
+
+async def _call_qwen_segment(client: httpx.AsyncClient, seg: dict) -> bytes | None:
+    """Call DashScope native API for a single segment. Returns WAV bytes or None on error."""
     try:
-        response = await client.audio.speech.create(
-            model="qwen-tts-instruct-flash",
-            input=seg["text"],
-            voice=seg["voice"],
-            response_format="wav",
-        )
-        if not response.content:
-            raise ValueError("Empty response from DashScope")
-        return response.content
+        payload = {
+            "model": "qwen3-tts-instruct-flash",
+            "input": {
+                "text": seg["text"],
+                "voice": seg["voice"],
+            },
+        }
+        resp = await client.post(_DASHSCOPE_TTS_URL, json=payload)
+        resp.raise_for_status()
+        audio_url = resp.json()["output"]["audio"]["url"]
+        audio_resp = await client.get(audio_url)
+        audio_resp.raise_for_status()
+        if not audio_resp.content:
+            raise ValueError("Empty audio response from DashScope")
+        return audio_resp.content
     except Exception:
         logger.exception("Qwen TTS segment call failed")
         return None
@@ -401,15 +413,11 @@ async def generate_audio(
         client = genai.Client(api_key=google_api_key)
         results = await _generate_gemini_throttled(client, chunks)
     elif tts_provider == "qwen":
-        if qwen_workspace_id:
-            base_url = f"https://{qwen_workspace_id}.eu-central-1.maas.aliyuncs.com/compatible-mode/v1"
-        else:
-            base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        client = AsyncOpenAI(
-            api_key=qwen_api_key,
-            base_url=base_url,
-        )
-        results = await _generate_qwen_throttled(client, chunks)
+        async with httpx.AsyncClient(
+            headers={"Authorization": f"Bearer {qwen_api_key}"},
+            timeout=httpx.Timeout(60.0),
+        ) as client:
+            results = await _generate_qwen_throttled(client, chunks)
     else:
         client = AsyncOpenAI(api_key=openai_api_key)
         tasks = [_generate_chunk_openai(client, chunk) for chunk in chunks]
