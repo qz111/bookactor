@@ -43,10 +43,8 @@ class TestSystemPromptQwen:
     def test_qwen_voices_in_prompt(self):
         from backend.services.llm_service import _system_prompt
         prompt = _system_prompt("qwen")
-        assert "Cherry" in prompt
-        assert "Ethan" in prompt
-        assert "Serena" in prompt
-        assert "Kai" in prompt
+        for voice in ["Cherry", "Serena", "Momo", "Vivian", "Ethan", "Kai", "Moon", "Nofish"]:
+            assert voice in prompt
 
     def test_qwen_prompt_excludes_gemini_voices(self):
         from backend.services.llm_service import _system_prompt

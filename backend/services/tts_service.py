@@ -182,19 +182,43 @@ _DASHSCOPE_TTS_URL = (
 
 _CJK_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df]')
 
-# Voices not supported by qwen3-tts-instruct-flash (dialect/legacy voices).
-# Maps to the closest supported substitute of the same gender.
+# Voices not supported by qwen3-tts-instruct-flash (dialect/regional/language-specific).
+# Maps each to the closest character-matched substitute of the same gender
+# drawn from the full qwen3-tts-instruct-flash voice roster.
 _QWEN_VOICE_FALLBACK = {
-    "Dylan": "Kai",    # Beijing dialect male → standard male
-    "Jada": "Cherry",  # Shanghai dialect female → standard female
-    "Sunny": "Cherry", # Sichuan dialect female → standard female
-    "Eric": "Kai",     # Sichuan dialect male → standard male
-    "Rocky": "Kai",    # Cantonese male → standard male
-    "Kiki": "Cherry",  # Cantonese female → standard female
-    "Li": "Kai",       # Nanjing dialect male → standard male
-    "Marcus": "Kai",   # Shaanxi dialect male → standard male
-    "Roy": "Kai",      # Southern Min male → standard male
-    "Peter": "Kai",    # Tianjin dialect male → standard male
+    # ── Beijing / northern dialect ──
+    "Dylan": "Nofish",       # casual northern male → quirky relatable male
+    # ── Shanghainese ──
+    "Jada": "Vivian",        # fast-paced energetic female → confident feisty female
+    # ── Sichuan dialect ──
+    "Sunny": "Cherry",       # sweet Sichuan girl → sunny sweet female
+    "Eric": "Ethan",         # everyday Sichuan male → warm standard male
+    # ── Cantonese ──
+    "Rocky": "Mochi",        # humorous witty male → clever quick-witted male
+    "Kiki": "Chelsie",       # sweet HK girlfriend → virtual girlfriend female
+    # ── Nanjing dialect ──
+    "Li": "Kai",             # patient gentle male → soothing male
+    # ── Shaanxi dialect ──
+    "Marcus": "Arthur",      # deep-voiced taciturn male → earthy slow-talking male
+    # ── Southern Min / Taiwanese ──
+    "Roy": "Mochi",          # humorous lively Taiwanese male → clever quick male
+    # ── Tianjin dialect ──
+    "Peter": "Neil",         # crosstalk comedian male → precise clear male
+    # ── qwen3-tts-flash-only international voices ──
+    "Jennifer": "Serena",    # premium American female → gentle premium female
+    "Ryan": "Moon",          # dramatic tension male → bold dramatic male
+    "Katerina": "Maia",      # mature memorable female → intellectual gentle female
+    "Aiden": "Mochi",        # young American male → young clever male
+    "Bodega": "Vincent",     # passionate Spanish male → raspy expressive male
+    "Sonrisa": "Cherry",     # cheerful Latin female → cheerful sunny female
+    "Alek": "Neil",          # cold steady Russian male → composed precise male
+    "Dolce": "Kai",          # laid-back Italian male → soothing relaxed male
+    "Sohee": "Nini",         # warm Korean unnie → warm sweet female
+    "Ono Anna": "Stella",    # clever spirited Japanese female → spirited energetic female
+    "Lenn": "Nofish",        # rebellious German youth → quirky relatable male
+    "Emilien": "Moon",       # romantic French male → charming bold male
+    "Andre": "Neil",         # steady magnetic male → steady composed male
+    "Radio Gol": "Neil",     # football commentator male → precise announcer male
 }
 
 
