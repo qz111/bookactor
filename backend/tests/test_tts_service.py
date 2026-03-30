@@ -577,6 +577,7 @@ class TestCallQwenSegment:
         assert payload["model"] == "qwen3-tts-instruct-flash"
         assert payload["input"]["voice"] == "Cherry"
         assert payload["input"]["text"] == "你好"
+        assert payload["input"]["language_type"] == "Chinese"
 
 
 class TestGenerateQwenThrottled:

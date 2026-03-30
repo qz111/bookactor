@@ -2,6 +2,7 @@ import asyncio
 import base64
 import io
 import logging
+import re
 import wave
 import httpx
 from google import genai
@@ -179,6 +180,12 @@ _DASHSCOPE_TTS_URL = (
     "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 )
 
+_CJK_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df]')
+
+
+def _language_type(text: str) -> str:
+    return "Chinese" if _CJK_RE.search(text) else "English"
+
 
 async def _call_qwen_segment(client: httpx.AsyncClient, seg: dict) -> bytes | None:
     """Call DashScope native API for a single segment. Returns WAV bytes or None on error."""
@@ -188,9 +195,12 @@ async def _call_qwen_segment(client: httpx.AsyncClient, seg: dict) -> bytes | No
             "input": {
                 "text": seg["text"],
                 "voice": seg["voice"],
+                "language_type": _language_type(seg["text"]),
             },
         }
         resp = await client.post(_DASHSCOPE_TTS_URL, json=payload)
+        if not resp.is_success:
+            logger.error("DashScope TTS %d: %s", resp.status_code, resp.text)
         resp.raise_for_status()
         audio_url = resp.json()["output"]["audio"]["url"]
         audio_resp = await client.get(audio_url)

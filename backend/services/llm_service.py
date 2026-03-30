@@ -20,7 +20,7 @@ _LLM_KEY_SOURCE = {
 _VOICES = {
     "openai": "alloy|echo|fable|onyx|nova|shimmer",
     "gemini": "Aoede|Charon|Fenrir|Kore|Puck|Zephyr|Leda|Orus",
-    "qwen": "Cherry|Ethan|Serena|Dylan",
+    "qwen": "Cherry|Ethan|Serena|Kai",
 }
 
 def _system_prompt(tts_provider: str) -> str:
@@ -53,7 +53,7 @@ def _system_prompt(tts_provider: str) -> str:
     if tts_provider == "gemini":
         prompt += "- Female voices: Aoede, Kore, Zephyr, Leda. Male voices: Charon, Fenrir, Puck, Orus.\n"
     elif tts_provider == "qwen":
-        prompt += "- Female voices: Cherry, Serena. Male voices: Ethan, Dylan.\n"
+        prompt += "- Female voices: Cherry, Serena. Male voices: Ethan, Kai.\n"
         prompt += (
             "- For Qwen TTS (Chinese): keep each individual character utterance under "
             "250 Chinese characters. Split long speeches into multiple lines if needed.\n"
