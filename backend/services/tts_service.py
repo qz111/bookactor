@@ -187,8 +187,14 @@ _VD_MODEL = "qwen3-tts-vd-2026-01-26"
 
 
 def _sanitise_name(name: str) -> str:
-    """Lowercase, replace non-alphanumeric chars with '_', truncate to 32."""
-    return re.sub(r'[^a-z0-9]+', '_', name.lower())[:32]
+    """Lowercase, replace non-alphanumeric chars with '_', truncate to 16 (API limit)."""
+    return re.sub(r'[^a-z0-9]+', '_', name.lower())[:16]
+
+
+_PREVIEW_TEXT = {
+    "zh": "大家好，欢迎收听。",
+    "en": "Hello everyone, welcome to listen.",
+}
 
 
 async def create_qwen_voice(
@@ -206,6 +212,7 @@ async def create_qwen_voice(
             "action": "create",
             "target_model": _VD_MODEL,
             "voice_prompt": voice_prompt,
+            "preview_text": _PREVIEW_TEXT[lang],
             "preferred_name": _sanitise_name(name),
             "language": lang,
         },

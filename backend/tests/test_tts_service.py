@@ -657,12 +657,23 @@ class TestCreateQwenVoice:
         payload = client.post.call_args[1]["json"]
         assert payload["input"]["preferred_name"] == "grandpa_bear"
 
-    def test_preferred_name_truncated_to_32(self):
+    def test_preferred_name_truncated_to_16(self):
         from backend.services import tts_service
         client = self._make_success_client("x")
         asyncio.run(tts_service.create_qwen_voice(client, "a" * 40, "desc", "en"))
         payload = client.post.call_args[1]["json"]
-        assert len(payload["input"]["preferred_name"]) == 32
+        assert len(payload["input"]["preferred_name"]) == 16
+
+    def test_preview_text_matches_language(self):
+        from backend.services import tts_service
+        client = self._make_success_client("x")
+        asyncio.run(tts_service.create_qwen_voice(client, "Bear", "desc", "zh"))
+        payload_zh = client.post.call_args[1]["json"]
+        asyncio.run(tts_service.create_qwen_voice(client, "Bear", "desc", "en"))
+        payload_en = client.post.call_args[1]["json"]
+        assert "preview_text" in payload_zh["input"]
+        assert "preview_text" in payload_en["input"]
+        assert payload_zh["input"]["preview_text"] != payload_en["input"]["preview_text"]
 
     def test_target_model_matches_vd_model(self):
         from backend.services import tts_service
