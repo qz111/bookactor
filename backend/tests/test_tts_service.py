@@ -295,11 +295,19 @@ class TestParseChunkSegments:
         assert result[0] == {"text": "Hello there.", "voice": "alloy"}
         assert result[1] == {"text": "Hi!", "voice": "echo"}
 
-    def test_skips_lines_without_colon(self):
+    def test_continuation_line_appended_to_previous_segment(self):
         from backend.services.tts_service import _parse_chunk_segments
-        text = "Narrator: Hello.\nsome junk\nBear: Bye."
+        text = "Narrator: Hello there,\nhow are you today?\nBear: Fine."
         result = _parse_chunk_segments(text, {"Narrator": "alloy", "Bear": "echo"})
         assert len(result) == 2
+        assert result[0]["text"] == "Hello there, how are you today?"
+
+    def test_blank_continuation_line_ignored(self):
+        from backend.services.tts_service import _parse_chunk_segments
+        text = "Narrator: Hello.\n\nBear: Bye."
+        result = _parse_chunk_segments(text, {"Narrator": "alloy", "Bear": "echo"})
+        assert len(result) == 2
+        assert result[0]["text"] == "Hello."
 
     def test_unknown_speaker_falls_back_to_first_voice(self):
         from backend.services.tts_service import _parse_chunk_segments

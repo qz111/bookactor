@@ -125,11 +125,18 @@ def _wav_duration_ms(wav_bytes: bytes) -> int:
 
 
 def _parse_chunk_segments(text: str, voice_map: dict[str, str]) -> list[dict]:
-    """Parse 'Character: utterance\\n' text into [{text, voice}] segments."""
+    """Parse 'Character: utterance\\n' text into [{text, voice}] segments.
+
+    Lines without a 'Character: ' prefix are treated as continuations of the
+    previous segment so that mid-utterance newlines from the LLM are not dropped.
+    """
     segments = []
     fallback_voice = list(voice_map.values())[0] if voice_map else "alloy"
     for line in text.strip().split("\n"):
+        stripped = line.strip()
         if ": " not in line:
+            if segments and stripped:
+                segments[-1]["text"] += " " + stripped
             continue
         name, utterance = line.split(": ", 1)
         voice = voice_map.get(name.strip(), fallback_voice)
