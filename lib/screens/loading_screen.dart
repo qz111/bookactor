@@ -79,12 +79,21 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
   int _step = 0; // 0=not started, 1=reading done, 2=scripting done, 3=voice design done, 4=done
   bool _hasError = false;
 
-  static const _steps = [
-    (icon: '📖', label: 'Reading pages...'),
-    (icon: '✍️', label: 'Writing script...'),
-    (icon: '🎨', label: 'Designing voices...'),
-    (icon: '🎙️', label: 'Recording voices...'),
-  ];
+  List<({String icon, String label})> get _steps {
+    if (widget.params?.ttsProvider == 'qwen') {
+      return const [
+        (icon: '📖', label: 'Reading pages...'),
+        (icon: '✍️', label: 'Writing script...'),
+        (icon: '🎨', label: 'Designing voices...'),
+        (icon: '🎙️', label: 'Recording voices...'),
+      ];
+    }
+    return const [
+      (icon: '📖', label: 'Reading pages...'),
+      (icon: '✍️', label: 'Writing script...'),
+      (icon: '🎙️', label: 'Recording voices...'),
+    ];
+  }
 
   @override
   void initState() {

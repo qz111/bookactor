@@ -240,7 +240,7 @@ async def design_voices(
         first_api_call = True
         for char in characters:
             char = dict(char)
-            if char.get("voice_id"):
+            if char.get("voice_id") is not None:
                 result.append(char)
                 continue
             if not first_api_call:
