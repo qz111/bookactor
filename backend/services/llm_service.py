@@ -20,7 +20,6 @@ _LLM_KEY_SOURCE = {
 _VOICES = {
     "openai": "alloy|echo|fable|onyx|nova|shimmer",
     "gemini": "Aoede|Charon|Fenrir|Kore|Puck|Zephyr|Leda|Orus",
-    "qwen": "Cherry|Serena|Momo|Vivian|Ethan|Kai|Moon|Nofish",
 }
 
 def _system_prompt(tts_provider: str) -> str:
@@ -50,14 +49,39 @@ def _system_prompt(tts_provider: str) -> str:
         "- Character names in the 'text' field must be the same English names as in 'characters'.\n"
         "- Every character must have a UNIQUE voice — never assign the same voice to two characters.\n"
     )
+    if tts_provider == "qwen":
+        return (
+            "You are a children's audiobook script writer. Given the extracted story text from a "
+            "picture book, output ONLY a JSON object (no markdown fences) with this exact structure:\n"
+            '{"characters": [{"name": "...", "voice_prompt": "<description>", "voice_id": null}], '
+            '"chunks": [{"index": <0-based int>, "text": "...", "speakers": ["..."], '
+            '"duration_ms": 0, "status": "pending"}]}\n'
+            "Rules:\n"
+            "- Narrator is always present.\n"
+            "- Group the full story into sequential dialogue passages. Each chunk's 'text' field "
+            "must not exceed 3500 bytes when UTF-8 encoded. "
+            "For Latin-script languages (English, French, German, etc.) this allows roughly "
+            "2000\u20133000 characters. "
+            "For CJK scripts (Chinese, Japanese, Korean) limit to roughly 800\u20131000 characters per chunk.\n"
+            "- Format 'text' as lines of 'Character: utterance\\n' \u2014 each Character name exactly "
+            "matching a name in the 'characters' array.\n"
+            "- Never cut mid-sentence. Chunks end at natural pause points.\n"
+            "- 'speakers' lists every character name that appears in that chunk's text.\n"
+            "- Narrator and characters flow naturally together.\n"
+            "- 'duration_ms' is always 0.\n"
+            "- LANGUAGE RULE: Only the 'text' field inside each chunk must be written in "
+            "the language specified by the user. All other fields \u2014 character names, speakers lists, "
+            "and all keys \u2014 must remain in English.\n"
+            "- Character names in the 'text' field must be the same English names as in 'characters'.\n"
+            "- Every character must have a UNIQUE voice_prompt.\n"
+            "- Always set voice_id to JSON null.\n"
+            "- voice_prompt: describe age, gender, pitch, speed, emotion, characteristics, and role "
+            "context. Be specific and multi-dimensional. Avoid vague terms like 'nice' or 'normal'. "
+            "Example: 'A cheerful 8-year-old girl, bright high-pitched voice, fast-paced speech, "
+            "excited and curious, sweet and childlike, suitable for children animation.'\n"
+        )
     if tts_provider == "gemini":
         prompt += "- Female voices: Aoede, Kore, Zephyr, Leda. Male voices: Charon, Fenrir, Puck, Orus.\n"
-    elif tts_provider == "qwen":
-        prompt += "- Female voices: Cherry, Serena, Momo, Vivian. Male voices: Ethan, Kai, Moon, Nofish.\n"
-        prompt += (
-            "- For Qwen TTS (Chinese): keep each individual character utterance under "
-            "250 Chinese characters. Split long speeches into multiple lines if needed.\n"
-        )
     prompt += (
         "- Use gender contrast: if Narrator uses a female voice, assign male voices to male "
         "characters and vice versa. Mix genders across characters for the best listening experience.\n"

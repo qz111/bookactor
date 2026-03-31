@@ -40,22 +40,21 @@ class TestSystemPrompt:
 
 
 class TestSystemPromptQwen:
-    def test_qwen_voices_in_prompt(self):
+    def test_qwen_prompt_contains_voice_prompt_field(self):
         from backend.services.llm_service import _system_prompt
         prompt = _system_prompt("qwen")
-        for voice in ["Cherry", "Serena", "Momo", "Vivian", "Ethan", "Kai", "Moon", "Nofish"]:
-            assert voice in prompt
+        assert "voice_prompt" in prompt
 
-    def test_qwen_prompt_excludes_gemini_voices(self):
+    def test_qwen_prompt_contains_voice_id_field(self):
         from backend.services.llm_service import _system_prompt
         prompt = _system_prompt("qwen")
-        assert "Aoede" not in prompt
-        assert "Charon" not in prompt
+        assert "voice_id" in prompt
 
-    def test_qwen_prompt_contains_utterance_length_rule(self):
+    def test_qwen_prompt_excludes_predefined_voices(self):
         from backend.services.llm_service import _system_prompt
         prompt = _system_prompt("qwen")
-        assert "250" in prompt
+        for voice in ["Cherry", "Ethan", "Serena", "Kai", "Moon", "Nofish", "Momo", "Vivian"]:
+            assert voice not in prompt, f"voice {voice!r} must not appear in Qwen VD prompt"
 
     def test_gemini_prompt_excludes_qwen_voices(self):
         from backend.services.llm_service import _system_prompt
