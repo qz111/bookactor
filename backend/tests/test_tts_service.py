@@ -570,14 +570,14 @@ class TestCallQwenSegment:
         fake_wav = _make_wav(200)
         mock_client = self._make_mock_client(fake_wav)
         asyncio.run(tts_service._call_qwen_segment(
-            mock_client, {"text": "你好", "voice": "Cherry"}
+            mock_client, {"text": "你好", "voice": "custom_voice_id_abc"}
         ))
         call_kwargs = mock_client.post.call_args[1]
         payload = call_kwargs["json"]
-        assert payload["model"] == "qwen3-tts-instruct-flash"
-        assert payload["input"]["voice"] == "Cherry"
+        assert payload["model"] == "qwen3-tts-vd-2026-01-26"
+        assert payload["input"]["voice"] == "custom_voice_id_abc"
         assert payload["input"]["text"] == "你好"
-        assert payload["input"]["language_type"] == "Chinese"
+        assert "language_type" not in payload["input"]
 
 
 class TestGenerateQwenThrottled:
