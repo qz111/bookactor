@@ -42,12 +42,16 @@ class VoiceDesignResponse(BaseModel):
 async def tts_design_voices(req: VoiceDesignRequest):
     """Create custom voice IDs for Qwen VD characters."""
     chars = [c.model_dump() for c in req.characters]
-    updated = await design_voices(
-        characters=chars,
-        language=req.language,
-        qwen_api_key=req.qwen_api_key,
-    )
-    return VoiceDesignResponse(characters=updated)
+    try:
+        updated = await design_voices(
+            characters=chars,
+            language=req.language,
+            qwen_api_key=req.qwen_api_key,
+        )
+        return VoiceDesignResponse(characters=updated)
+    except Exception as exc:
+        logger.exception("Error in /tts/design-voices")
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.post("/tts")
