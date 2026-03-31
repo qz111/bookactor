@@ -633,6 +633,76 @@ class TestGenerateQwenThrottled:
         assert results[0]["duration_ms"] > 500
 
 
+class TestCreateQwenVoice:
+    def _make_success_client(self, voice_id: str) -> MagicMock:
+        resp = MagicMock()
+        resp.json.return_value = {"output": {"voice": voice_id}}
+        resp.raise_for_status = MagicMock()
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+        return client
+
+    def test_returns_voice_id_on_success(self):
+        from backend.services import tts_service
+        client = self._make_success_client("custom_voice_abc123")
+        result = asyncio.run(tts_service.create_qwen_voice(
+            client, "Grandpa Bear", "A gentle elderly grandfather...", "en"
+        ))
+        assert result == "custom_voice_abc123"
+
+    def test_sanitises_preferred_name(self):
+        from backend.services import tts_service
+        client = self._make_success_client("x")
+        asyncio.run(tts_service.create_qwen_voice(client, "Grandpa Bear", "desc", "en"))
+        payload = client.post.call_args[1]["json"]
+        assert payload["input"]["preferred_name"] == "grandpa_bear"
+
+    def test_preferred_name_truncated_to_32(self):
+        from backend.services import tts_service
+        client = self._make_success_client("x")
+        asyncio.run(tts_service.create_qwen_voice(client, "a" * 40, "desc", "en"))
+        payload = client.post.call_args[1]["json"]
+        assert len(payload["input"]["preferred_name"]) == 32
+
+    def test_target_model_matches_vd_model(self):
+        from backend.services import tts_service
+        client = self._make_success_client("x")
+        asyncio.run(tts_service.create_qwen_voice(client, "Bear", "desc", "en"))
+        payload = client.post.call_args[1]["json"]
+        assert payload["input"]["target_model"] == "qwen3-tts-vd-2026-01-26"
+
+    def test_missing_output_voice_returns_none(self):
+        from backend.services import tts_service
+        resp = MagicMock()
+        resp.json.return_value = {"output": {}}
+        resp.raise_for_status = MagicMock()
+        client = MagicMock()
+        client.post = AsyncMock(return_value=resp)
+        result = asyncio.run(tts_service.create_qwen_voice(client, "Bear", "desc", "en"))
+        assert result is None
+
+    def test_http_error_returns_none(self):
+        from backend.services import tts_service
+        client = MagicMock()
+        client.post = AsyncMock(side_effect=RuntimeError("Network error"))
+        result = asyncio.run(tts_service.create_qwen_voice(client, "Bear", "desc", "en"))
+        assert result is None
+
+    def test_language_zh_passed_as_zh(self):
+        from backend.services import tts_service
+        client = self._make_success_client("x")
+        asyncio.run(tts_service.create_qwen_voice(client, "Bear", "desc", "zh"))
+        payload = client.post.call_args[1]["json"]
+        assert payload["input"]["language"] == "zh"
+
+    def test_language_non_zh_mapped_to_en(self):
+        from backend.services import tts_service
+        client = self._make_success_client("x")
+        asyncio.run(tts_service.create_qwen_voice(client, "Bear", "desc", "fr"))
+        payload = client.post.call_args[1]["json"]
+        assert payload["input"]["language"] == "en"
+
+
 class TestGenerateAudioQwen:
     def test_routes_to_qwen_with_correct_auth(self):
         from backend.services import tts_service

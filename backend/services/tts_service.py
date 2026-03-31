@@ -180,6 +180,46 @@ _DASHSCOPE_TTS_URL = (
     "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 )
 
+_VOICE_DESIGN_URL = (
+    "https://dashscope-intl.aliyuncs.com/api/v1/services/audio/tts/customization"
+)
+_VD_MODEL = "qwen3-tts-vd-2026-01-26"
+
+
+def _sanitise_name(name: str) -> str:
+    """Lowercase, replace non-alphanumeric chars with '_', truncate to 32."""
+    return re.sub(r'[^a-z0-9]+', '_', name.lower())[:32]
+
+
+async def create_qwen_voice(
+    client: httpx.AsyncClient, name: str, voice_prompt: str, language: str
+) -> str | None:
+    """Create a custom Qwen voice via Voice Design API. Returns voice_id or None on failure."""
+    lang = "zh" if language == "zh" else "en"
+    payload = {
+        "model": "qwen-voice-design",
+        "input": {
+            "action": "create",
+            "target_model": _VD_MODEL,
+            "voice_prompt": voice_prompt,
+            "preferred_name": _sanitise_name(name),
+            "language": lang,
+        },
+        "parameters": {"sample_rate": 24000, "response_format": "wav"},
+    }
+    try:
+        resp = await client.post(_VOICE_DESIGN_URL, json=payload)
+        resp.raise_for_status()
+        voice = resp.json().get("output", {}).get("voice", "")
+        if not voice:
+            logger.error("create_qwen_voice: missing output.voice for '%s'", name)
+            return None
+        return voice
+    except Exception:
+        logger.exception("create_qwen_voice failed for '%s'", name)
+        return None
+
+
 _CJK_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df]')
 
 # Voices not supported by qwen3-tts-instruct-flash (dialect/regional/language-specific).
