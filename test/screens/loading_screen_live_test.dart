@@ -187,11 +187,13 @@ void main() {
     final fakeApi = _RecordingApiService();
     final tempAudioDir = Directory.systemTemp.createTempSync('bookactor_test_');
     addTearDown(() => tempAudioDir.deleteSync(recursive: true));
+    final fakeImage = File('${tempAudioDir.path}/fake.png')
+      ..writeAsBytesSync([1, 2, 3]);
 
     final params = LoadingParams(
       bookId: 'test_book_live',
       versionId: 'test_book_live_en',
-      filePath: 'test/assets/fake_image.png',
+      filePath: fakeImage.path,
       language: 'en',
       vlmProvider: 'gemini',
       llmProvider: 'gpt4o',
