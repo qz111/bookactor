@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from backend.services.tts_service import generate_audio
+from backend.services.tts_service import generate_audio, design_voices
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,6 +20,34 @@ class TtsRequest(BaseModel):
     google_api_key: str = ""
     qwen_api_key: str = ""
     qwen_workspace_id: str = ""
+
+
+class VoiceDesignCharacter(BaseModel):
+    name: str
+    voice_prompt: str
+    voice_id: str | None = None
+
+
+class VoiceDesignRequest(BaseModel):
+    characters: list[VoiceDesignCharacter]
+    language: str
+    qwen_api_key: str
+
+
+class VoiceDesignResponse(BaseModel):
+    characters: list[VoiceDesignCharacter]
+
+
+@router.post("/tts/design-voices", response_model=VoiceDesignResponse)
+async def tts_design_voices(req: VoiceDesignRequest):
+    """Create custom voice IDs for Qwen VD characters."""
+    chars = [c.model_dump() for c in req.characters]
+    updated = await design_voices(
+        characters=chars,
+        language=req.language,
+        qwen_api_key=req.qwen_api_key,
+    )
+    return VoiceDesignResponse(characters=updated)
 
 
 @router.post("/tts")
