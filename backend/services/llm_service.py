@@ -150,6 +150,9 @@ def generate_script(
             api_key=api_key,
         )
         raw = response.choices[0].message.content
+        if not raw:
+            finish = response.choices[0].finish_reason
+            raise ValueError(f"LLM returned empty content (finish_reason={finish!r})")
         try:
             data = json.loads(_strip_fences(raw))
             for chunk in data.get("chunks", []):

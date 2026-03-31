@@ -80,6 +80,8 @@ def analyze_pages(
         api_key=api_key,
     )
     raw = response.choices[0].message.content
+    if not raw:
+        raise ValueError(f"VLM returned empty content (finish_reason={response.choices[0].finish_reason!r})")
     try:
         data = json.loads(_strip_fences(raw))
         return data["pages"]
