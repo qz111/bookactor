@@ -224,6 +224,35 @@ async def create_qwen_voice(
         return None
 
 
+async def design_voices(
+    characters: list[dict], language: str, qwen_api_key: str
+) -> list[dict]:
+    """Create voice IDs for characters that don't have one yet.
+
+    Never raises — characters where creation fails retain voice_id=None.
+    Sequential calls at 10 RPM (6 s between API calls).
+    """
+    async with httpx.AsyncClient(
+        headers={"Authorization": f"Bearer {qwen_api_key}"},
+        timeout=httpx.Timeout(60.0),
+    ) as client:
+        result = []
+        first_api_call = True
+        for char in characters:
+            char = dict(char)
+            if char.get("voice_id"):
+                result.append(char)
+                continue
+            if not first_api_call:
+                await asyncio.sleep(6)  # 10 RPM throttle
+            first_api_call = False
+            char["voice_id"] = await create_qwen_voice(
+                client, char["name"], char.get("voice_prompt", ""), language
+            )
+            result.append(char)
+        return result
+
+
 _CJK_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df]')
 
 # Voices not supported by qwen3-tts-instruct-flash (dialect/regional/language-specific).

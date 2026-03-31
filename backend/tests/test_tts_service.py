@@ -703,6 +703,107 @@ class TestCreateQwenVoice:
         assert payload["input"]["language"] == "en"
 
 
+class TestDesignVoices:
+    def test_fills_voice_id_for_characters_without_one(self):
+        from backend.services import tts_service
+
+        async def fake_create(client, name, voice_prompt, language):
+            return f"voice_{name.lower()}"
+
+        chars = [{"name": "Bear", "voice_prompt": "big gentle bear", "voice_id": None}]
+        with patch.object(tts_service, "create_qwen_voice", side_effect=fake_create):
+            result = asyncio.run(tts_service.design_voices(chars, "en", "fake-key"))
+        assert result[0]["voice_id"] == "voice_bear"
+
+    def test_skips_characters_with_existing_voice_id(self):
+        from backend.services import tts_service
+
+        create_called = []
+
+        async def fake_create(client, name, voice_prompt, language):
+            create_called.append(name)
+            return "new_voice"
+
+        chars = [
+            {"name": "Bear", "voice_prompt": "desc", "voice_id": "existing_id"},
+            {"name": "Rabbit", "voice_prompt": "desc", "voice_id": None},
+        ]
+        with patch.object(tts_service, "create_qwen_voice", side_effect=fake_create):
+            result = asyncio.run(tts_service.design_voices(chars, "en", "fake-key"))
+
+        assert "Bear" not in create_called
+        assert result[0]["voice_id"] == "existing_id"
+        assert result[1]["voice_id"] == "new_voice"
+
+    def test_never_raises_on_per_character_failure(self):
+        from backend.services import tts_service
+
+        async def fake_create(client, name, voice_prompt, language):
+            return None
+
+        chars = [{"name": "Bear", "voice_prompt": "desc", "voice_id": None}]
+        with patch.object(tts_service, "create_qwen_voice", side_effect=fake_create):
+            result = asyncio.run(tts_service.design_voices(chars, "en", "fake-key"))
+        assert result[0]["voice_id"] is None
+
+    def test_returns_partial_list_on_mixed_failure(self):
+        from backend.services import tts_service
+
+        async def fake_create(client, name, voice_prompt, language):
+            return "ok_id" if name == "Bear" else None
+
+        chars = [
+            {"name": "Bear", "voice_prompt": "desc", "voice_id": None},
+            {"name": "Rabbit", "voice_prompt": "desc", "voice_id": None},
+        ]
+        with patch.object(tts_service, "create_qwen_voice", side_effect=fake_create):
+            result = asyncio.run(tts_service.design_voices(chars, "en", "fake-key"))
+        assert result[0]["voice_id"] == "ok_id"
+        assert result[1]["voice_id"] is None
+
+    def test_throttle_between_api_calls(self):
+        from backend.services import tts_service
+
+        sleep_calls = []
+
+        async def fake_sleep(t):
+            sleep_calls.append(t)
+
+        async def fake_create(client, name, voice_prompt, language):
+            return "v"
+
+        chars = [
+            {"name": "A", "voice_prompt": "d", "voice_id": None},
+            {"name": "B", "voice_prompt": "d", "voice_id": None},
+            {"name": "C", "voice_prompt": "d", "voice_id": None},
+        ]
+        with patch.object(tts_service, "create_qwen_voice", side_effect=fake_create), \
+             patch("backend.services.tts_service.asyncio.sleep", side_effect=fake_sleep):
+            asyncio.run(tts_service.design_voices(chars, "en", "fake-key"))
+
+        # 3 API calls → 2 sleeps between them, each 6 s (10 RPM)
+        assert len(sleep_calls) == 2
+        assert all(s == 6 for s in sleep_calls)
+
+    def test_no_sleep_before_first_call(self):
+        from backend.services import tts_service
+
+        sleep_calls = []
+
+        async def fake_sleep(t):
+            sleep_calls.append(t)
+
+        async def fake_create(client, name, voice_prompt, language):
+            return "v"
+
+        chars = [{"name": "A", "voice_prompt": "d", "voice_id": None}]
+        with patch.object(tts_service, "create_qwen_voice", side_effect=fake_create), \
+             patch("backend.services.tts_service.asyncio.sleep", side_effect=fake_sleep):
+            asyncio.run(tts_service.design_voices(chars, "en", "fake-key"))
+
+        assert len(sleep_calls) == 0
+
+
 class TestGenerateAudioQwen:
     def test_routes_to_qwen_with_correct_auth(self):
         from backend.services import tts_service
