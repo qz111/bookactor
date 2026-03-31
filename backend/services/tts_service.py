@@ -194,7 +194,11 @@ def _sanitise_name(name: str) -> str:
 async def create_qwen_voice(
     client: httpx.AsyncClient, name: str, voice_prompt: str, language: str
 ) -> str | None:
-    """Create a custom Qwen voice via Voice Design API. Returns voice_id or None on failure."""
+    """Create a custom Qwen voice via Voice Design API. Returns voice_id or None on failure.
+
+    The caller is responsible for supplying a client pre-configured with
+    Authorization: Bearer <qwen_api_key> header.
+    """
     lang = "zh" if language == "zh" else "en"
     payload = {
         "model": "qwen-voice-design",
