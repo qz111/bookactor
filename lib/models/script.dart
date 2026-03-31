@@ -2,22 +2,36 @@ import 'dart:convert';
 
 class ScriptCharacter {
   final String name;
-  final String voice;
+  // OpenAI / Gemini schema
+  final String? voice;
   final String? traits;
+  // Qwen Voice Design schema
+  final String? voicePrompt;
+  final String? voiceId;
 
-  const ScriptCharacter({required this.name, required this.voice, this.traits});
+  const ScriptCharacter({
+    required this.name,
+    this.voice,
+    this.traits,
+    this.voicePrompt,
+    this.voiceId,
+  });
 
   factory ScriptCharacter.fromJson(Map<String, dynamic> json) =>
       ScriptCharacter(
         name: json['name'] as String,
-        voice: json['voice'] as String,
+        voice: json['voice'] as String?,
         traits: json['traits'] as String?,
+        voicePrompt: json['voice_prompt'] as String?,
+        voiceId: json['voice_id'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'voice': voice,
         if (traits != null) 'traits': traits,
+        'voice_prompt': voicePrompt,
+        'voice_id': voiceId,
       };
 }
 
@@ -72,6 +86,13 @@ class Script {
   String voiceFor(String characterName) {
     final match = characters.where((c) => c.name == characterName).firstOrNull;
     return match?.voice ?? 'alloy';
+  }
+
+  /// Looks up the voice ID for a Qwen VD character by name.
+  /// Returns null if not found or if voice_id is null.
+  String? voiceIdFor(String characterName) {
+    final match = characters.where((c) => c.name == characterName).firstOrNull;
+    return match?.voiceId;
   }
 
   factory Script.fromJson(String jsonStr) {
