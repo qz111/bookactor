@@ -95,6 +95,24 @@ class ApiService {
     return List<Map<String, dynamic>>.from(jsonDecode(response.body) as List);
   }
 
+  Future<List<Map<String, dynamic>>> designVoices({
+    required List<Map<String, dynamic>> characters,
+    required String language,
+  }) async {
+    final response = await client.post(
+      Uri.parse('$baseUrl/tts/design-voices'),
+      headers: {'content-type': 'application/json'},
+      body: jsonEncode({
+        'characters': characters,
+        'language': language,
+        'qwen_api_key': qwenKey,
+      }),
+    );
+    _checkStatus(response);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return List<Map<String, dynamic>>.from(data['characters'] as List);
+  }
+
   void _checkStatus(http.Response response) {
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode, response.body);
