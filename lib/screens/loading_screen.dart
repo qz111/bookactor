@@ -14,7 +14,7 @@ import '../models/script.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 
-enum ResumeStage { vlm, llm, tts }
+enum ResumeStage { vlm, llm, voiceDesign, tts }
 
 /// Parameters passed to LoadingScreen via GoRouter's extra field.
 class LoadingParams {
@@ -76,12 +76,13 @@ class LoadingScreen extends ConsumerStatefulWidget {
 }
 
 class _LoadingScreenState extends ConsumerState<LoadingScreen> {
-  int _step = 0; // 0=not started, 1=reading done, 2=scripting done, 3=done
+  int _step = 0; // 0=not started, 1=reading done, 2=scripting done, 3=voice design done, 4=done
   bool _hasError = false;
 
   static const _steps = [
     (icon: '📖', label: 'Reading pages...'),
     (icon: '✍️', label: 'Writing script...'),
+    (icon: '🎨', label: 'Designing voices...'),
     (icon: '🎙️', label: 'Recording voices...'),
   ];
 
@@ -122,6 +123,8 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
       // startStage==null means new-language run (isNewBook=false): skip VLM, run LLM.
       final bool runLlm =
           runVlm || p.startStage == null || p.startStage == ResumeStage.llm;
+      final bool runVoiceDesign = p.ttsProvider == 'qwen' &&
+          (runLlm || p.startStage == ResumeStage.voiceDesign);
 
       // ── 1. Analyze (VLM) ────────────────────────────────────────────────
       List<Map<String, dynamic>> vlmOutput = const [];
@@ -201,7 +204,31 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
       if (!mounted) return;
       setState(() => _step = 2);
 
-      // ── 3. TTS ──────────────────────────────────────────────────────────
+      // ── 3. Voice Design (Qwen only) ─────────────────────────────────────
+      if (runVoiceDesign) {
+        final rawChars = List<Map<String, dynamic>>.from(
+            scriptMap['characters'] as List);
+        final updatedChars = await api.designVoices(
+          characters: rawChars,
+          language: p.language,
+        );
+        scriptMap = {...scriptMap, 'characters': updatedChars};
+        // Persist partial results before checking for failures (enables idempotent retry)
+        await AppDatabase.instance.updateAudioVersionStatus(
+          p.versionId, 'generating',
+          scriptJson: jsonEncode(scriptMap),
+        );
+        final anyFailed = updatedChars.any((c) => c['voice_id'] == null);
+        if (anyFailed) {
+          if (!mounted) return;
+          setState(() => _hasError = true);
+          return;
+        }
+      }
+      if (!mounted) return;
+      setState(() => _step = 3);
+
+      // ── 4. TTS ──────────────────────────────────────────────────────────
       // Compute audioDir independently — DB value may be '' if version never completed
       final String audioDir;
       if (p.audioDirOverride != null) {
@@ -233,7 +260,12 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen> {
 
       final pendingChunks = chunksToGenerate.map((c) {
         final speakers = List<String>.from(c['speakers'] as List);
-        final voiceMap = {for (final s in speakers) s: script.voiceFor(s)};
+        final voiceMap = {
+          for (final s in speakers)
+            s: (p.ttsProvider == 'qwen')
+                ? (script.voiceIdFor(s) ?? '')
+                : script.voiceFor(s),
+        };
         return {
           'index': c['index'],
           'text': c['text'],

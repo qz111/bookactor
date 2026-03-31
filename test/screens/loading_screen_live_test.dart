@@ -64,6 +64,70 @@ class _RecordingApiService extends ApiService {
       'duration_ms': 1200,
     }).toList();
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> designVoices({
+    required List<Map<String, dynamic>> characters,
+    required String language,
+  }) async {
+    calls.add('designVoices');
+    return characters
+        .map((c) => {...c, 'voice_id': 'v_${(c['name'] as String).toLowerCase()}'})
+        .toList();
+  }
+}
+
+class _QwenApiService extends _RecordingApiService {
+  @override
+  Future<Map<String, dynamic>> generateScript({
+    required List<Map<String, dynamic>> vlmOutput,
+    required String language,
+    required String llmProvider,
+    String ttsProvider = 'openai',
+  }) async {
+    calls.add('script');
+    return {
+      'characters': [
+        {'name': 'Narrator', 'voice_prompt': 'calm narrator', 'voice_id': null}
+      ],
+      'chunks': [
+        {
+          'index': 0,
+          'speakers': ['Narrator'],
+          'text': 'Narrator: Hi',
+          'duration_ms': 0,
+          'status': 'pending',
+        }
+      ],
+    };
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateAudio({
+    required List<Map<String, dynamic>> chunks,
+    String ttsProvider = 'openai',
+  }) async {
+    calls.add('tts');
+    return chunks
+        .map((c) => {
+              'index': c['index'] as int,
+              'status': 'ready',
+              'audio_b64': base64Encode([1, 2, 3]),
+              'duration_ms': 1200,
+            })
+        .toList();
+  }
+}
+
+class _QwenNullVoiceIdApiService extends _QwenApiService {
+  @override
+  Future<List<Map<String, dynamic>>> designVoices({
+    required List<Map<String, dynamic>> characters,
+    required String language,
+  }) async {
+    calls.add('designVoices');
+    return characters.map((c) => {...c, 'voice_id': null}).toList();
+  }
 }
 
 /// Returns status='error' for every chunk — used to test TTS failure handling.
@@ -420,8 +484,168 @@ void main() {
       expect(p.startStage, ResumeStage.tts);
     });
 
-    test('ResumeStage enum has vlm, llm, tts values', () {
-      expect(ResumeStage.values, containsAll([ResumeStage.vlm, ResumeStage.llm, ResumeStage.tts]));
+    test('ResumeStage enum has vlm, llm, voiceDesign, tts values', () {
+      expect(ResumeStage.values, containsAll([
+        ResumeStage.vlm, ResumeStage.llm, ResumeStage.voiceDesign, ResumeStage.tts,
+      ]));
     });
+  });
+
+  testWidgets('Qwen: calls analyze->script->designVoices->tts in order',
+      (tester) async {
+    final qwenApi = _QwenApiService();
+    final tempDir = Directory.systemTemp.createTempSync('bookactor_qwen_');
+    addTearDown(() { if (tempDir.existsSync()) tempDir.deleteSync(recursive: true); });
+    final fakeImage = File('${tempDir.path}/fake.png')..writeAsBytesSync([1, 2, 3]);
+
+    final params = LoadingParams(
+      bookId: 'test_book_live',
+      versionId: 'test_book_live_en',
+      filePath: fakeImage.path,
+      language: 'zh',
+      vlmProvider: 'gemini',
+      llmProvider: 'gpt4o',
+      ttsProvider: 'qwen',
+      processingMode: ProcessingMode.textHeavy,
+      isNewBook: true,
+      audioDirOverride: tempDir.path,
+    );
+
+    final router = GoRouter(initialLocation: '/loading', routes: [
+      GoRoute(path: '/loading', builder: (_, __) =>
+          LoadingScreen(params: params, apiService: qwenApi)),
+      GoRoute(path: '/player/:versionId', builder: (_, __) =>
+          const Scaffold(body: Text('player'))),
+    ]);
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ProviderScope(child: MaterialApp.router(routerConfig: router)));
+      await Future<void>.delayed(const Duration(seconds: 5));
+    });
+    await tester.pump();
+
+    expect(qwenApi.calls, equals(['analyze', 'script', 'designVoices', 'tts']));
+  });
+
+  testWidgets('OpenAI: designVoices not called',
+      (tester) async {
+    final api = _RecordingApiService();
+    final tempDir = Directory.systemTemp.createTempSync('bookactor_openai_');
+    addTearDown(() { if (tempDir.existsSync()) tempDir.deleteSync(recursive: true); });
+    final fakeImage = File('${tempDir.path}/fake.png')..writeAsBytesSync([1, 2, 3]);
+
+    final params = LoadingParams(
+      bookId: 'test_book_live',
+      versionId: 'test_book_live_en',
+      filePath: fakeImage.path,
+      language: 'en',
+      vlmProvider: 'gemini',
+      llmProvider: 'gpt4o',
+      ttsProvider: 'openai',
+      processingMode: ProcessingMode.textHeavy,
+      isNewBook: true,
+      audioDirOverride: tempDir.path,
+    );
+
+    final router = GoRouter(initialLocation: '/loading', routes: [
+      GoRoute(path: '/loading', builder: (_, __) =>
+          LoadingScreen(params: params, apiService: api)),
+      GoRoute(path: '/player/:versionId', builder: (_, __) =>
+          const Scaffold(body: Text('player'))),
+    ]);
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ProviderScope(child: MaterialApp.router(routerConfig: router)));
+      await Future<void>.delayed(const Duration(seconds: 5));
+    });
+    await tester.pump();
+
+    expect(api.calls, containsAll(['analyze', 'script', 'tts']));
+    expect(api.calls, isNot(contains('designVoices')));
+  });
+
+  testWidgets('Qwen Voice Design failure: shows error screen, does not call tts',
+      (tester) async {
+    final api = _QwenNullVoiceIdApiService();
+    final tempDir = Directory.systemTemp.createTempSync('bookactor_qwen_fail_');
+    addTearDown(() { if (tempDir.existsSync()) tempDir.deleteSync(recursive: true); });
+    final fakeImage = File('${tempDir.path}/fake.png')..writeAsBytesSync([1, 2, 3]);
+
+    final params = LoadingParams(
+      bookId: 'test_book_live',
+      versionId: 'test_book_live_en',
+      filePath: fakeImage.path,
+      language: 'zh',
+      vlmProvider: 'gemini',
+      llmProvider: 'gpt4o',
+      ttsProvider: 'qwen',
+      processingMode: ProcessingMode.textHeavy,
+      isNewBook: true,
+      audioDirOverride: tempDir.path,
+    );
+
+    final router = GoRouter(initialLocation: '/loading', routes: [
+      GoRoute(path: '/loading', builder: (_, __) =>
+          LoadingScreen(params: params, apiService: api)),
+      GoRoute(path: '/player/:versionId', builder: (_, __) =>
+          const Scaffold(body: Text('player'))),
+    ]);
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ProviderScope(child: MaterialApp.router(routerConfig: router)));
+      await Future<void>.delayed(const Duration(seconds: 5));
+    });
+    await tester.pump();
+
+    expect(find.text('Something went wrong'), findsOneWidget);
+    expect(find.text('player'), findsNothing);
+    expect(api.calls, isNot(contains('tts')));
+  });
+
+  testWidgets('Qwen VD resume: startStage=voiceDesign skips VLM+LLM, runs designVoices+tts',
+      (tester) async {
+    const scriptJson = '{"characters":['
+        '{"name":"Narrator","voice_prompt":"calm","voice_id":null}'
+        '],"chunks":['
+        '{"index":0,"speakers":["Narrator"],"text":"Narrator: Hi",'
+        '"duration_ms":0,"status":"pending"}'
+        ']}';
+    await AppDatabase.instance.updateAudioVersionStatus(
+      'test_book_live_en', 'error', scriptJson: scriptJson);
+
+    final api = _QwenApiService();
+    final tempDir = Directory.systemTemp.createTempSync('bookactor_vd_resume_');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+
+    final params = LoadingParams(
+      bookId: 'test_book_live',
+      versionId: 'test_book_live_en',
+      filePath: '',
+      language: 'zh',
+      vlmProvider: 'gemini',
+      llmProvider: 'gpt4o',
+      ttsProvider: 'qwen',
+      processingMode: ProcessingMode.textHeavy,
+      isNewBook: false,
+      startStage: ResumeStage.voiceDesign,
+      audioDirOverride: tempDir.path,
+      scriptJsonForResume: scriptJson,
+    );
+
+    final router = GoRouter(initialLocation: '/loading', routes: [
+      GoRoute(path: '/loading', builder: (_, __) =>
+          LoadingScreen(params: params, apiService: api)),
+      GoRoute(path: '/player/:versionId', builder: (_, __) =>
+          const Scaffold(body: Text('player'))),
+    ]);
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ProviderScope(child: MaterialApp.router(routerConfig: router)));
+      await Future<void>.delayed(const Duration(seconds: 5));
+    });
+    await tester.pump();
+    await tester.pump();
+
+    expect(api.calls, equals(['designVoices', 'tts']));
   });
 }
