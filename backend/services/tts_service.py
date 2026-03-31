@@ -244,10 +244,10 @@ async def design_voices(
                 result.append(char)
                 continue
             if not first_api_call:
-                await asyncio.sleep(6)  # 10 RPM throttle
+                await asyncio.sleep(6)  # 10 RPM = 6 s between calls
             first_api_call = False
             char["voice_id"] = await create_qwen_voice(
-                client, char["name"], char.get("voice_prompt", ""), language
+                client, char.get("name", ""), char.get("voice_prompt", ""), language
             )
             result.append(char)
         return result
