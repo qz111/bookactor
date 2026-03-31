@@ -56,6 +56,22 @@ class TestSystemPromptQwen:
         for voice in ["Cherry", "Ethan", "Serena", "Kai", "Moon", "Nofish", "Momo", "Vivian"]:
             assert voice not in prompt, f"voice {voice!r} must not appear in Qwen VD prompt"
 
+    def test_qwen_prompt_contains_all_dimensions(self):
+        from backend.services.llm_service import _system_prompt
+        prompt = _system_prompt("qwen")
+        for dimension in ["Pitch", "Pace", "Emotion", "Characteristics", "Purpose"]:
+            assert dimension in prompt, f"dimension {dimension!r} missing from Qwen VD prompt"
+
+    def test_qwen_prompt_requires_english_voice_prompt(self):
+        from backend.services.llm_service import _system_prompt
+        prompt = _system_prompt("qwen")
+        assert "English only" in prompt
+
+    def test_qwen_prompt_contains_purpose_clause(self):
+        from backend.services.llm_service import _system_prompt
+        prompt = _system_prompt("qwen")
+        assert "audiobook narration" in prompt
+
     def test_gemini_prompt_excludes_qwen_voices(self):
         from backend.services.llm_service import _system_prompt
         prompt = _system_prompt("gemini")
