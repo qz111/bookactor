@@ -1,7 +1,10 @@
 import base64
 import json
+import logging
 import re
 import litellm
+
+logger = logging.getLogger(__name__)
 
 
 def _strip_fences(text: str) -> str:
@@ -44,6 +47,11 @@ _VLM_KEY_SOURCE = {
     "gemini": "google",
 }
 
+_STRICT_ADDENDUM = (
+    "\n\nIMPORTANT: Your previous response was not valid JSON. "
+    "Output ONLY the raw JSON object. No explanation, no markdown, no code fences."
+)
+
 
 def analyze_pages(
     image_bytes_list: list[bytes],
@@ -71,19 +79,25 @@ def analyze_pages(
     user_text = _USER_PROMPTS.get(processing_mode, _USER_PROMPTS["text_heavy"])
     image_content.append({"type": "text", "text": user_text})
 
-    response = litellm.completion(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": image_content},
-        ],
-        api_key=api_key,
-    )
-    raw = response.choices[0].message.content
-    if not raw:
-        raise ValueError(f"VLM returned empty content (finish_reason={response.choices[0].finish_reason!r})")
-    try:
-        data = json.loads(_strip_fences(raw))
-        return data["pages"]
-    except (json.JSONDecodeError, KeyError) as exc:
-        raise ValueError(f"VLM returned invalid JSON: {raw!r}") from exc
+    for attempt in range(2):
+        response = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt + (_STRICT_ADDENDUM if attempt == 1 else "")},
+                {"role": "user", "content": image_content},
+            ],
+            api_key=api_key,
+        )
+        raw = response.choices[0].message.content
+        if not raw:
+            finish = response.choices[0].finish_reason
+            raise ValueError(f"VLM returned empty content (finish_reason={finish!r})")
+        try:
+            data = json.loads(_strip_fences(raw))
+            return data["pages"]
+        except (json.JSONDecodeError, KeyError) as exc:
+            logger.warning("VLM attempt %d returned invalid JSON: %.500s", attempt + 1, raw)
+            if attempt == 1:
+                raise ValueError(f"VLM returned invalid JSON: {raw!r}") from exc
+
+    raise ValueError("VLM returned invalid JSON after 2 attempts")
